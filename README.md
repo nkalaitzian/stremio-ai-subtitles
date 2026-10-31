@@ -148,8 +148,42 @@ addon.example.com {
 
 Then install `https://addon.example.com/manifest.json`.
 
-Railway, Fly.io and [BeamUp](https://beamup.dev/) work the same way — any host that runs `npm start`
-and gives you HTTPS. Fly.io needs a Dockerfile; ask if you want one added to the repo.
+### BeamUp (Stremio's own addon PaaS)
+
+BeamUp is the Stremio team's free addon host. Its old front-end domain (`beamup.dev`) is now parked,
+but the service itself is still live: the deploy host is **`a.baby-beamup.club`** and the dashboard is
+at [baby-beamup.club](https://baby-beamup.club). Add-ons are deployed over SSH with `beamup-cli`:
+
+```bash
+npm install -g beamup-cli
+beamup config a.baby-beamup.club <your-github-username>   # SSH key must be on GitHub
+cd stremio-ai-subtitles
+beamup                                                    # asks for a project name, then deploys
+# later updates:
+git push beamup master
+```
+
+Your add-on will be at:
+
+```
+https://<hash>-<project-name>.baby-beamup.club/manifest.json
+```
+
+where `<hash>` is the first 12 hex chars of `sha256(githubUsername.toLowerCase() + "\n")`. For this
+repository and GitHub user `nkalaitzian`, with the default project name `stremio-ai-subtitles`,
+that is:
+
+```
+https://d0d76533837f-stremio-ai-subtitles.baby-beamup.club/manifest.json
+```
+
+BeamUp builds with the Herokuish Node buildpack (`package.json` → `npm install` → `npm start`), so
+the add-on's `PORT` handling is what it needs. Caveats as of late 2026: BeamUp's buildpack pins Node
+**22.11.0** (older than current security releases; newer major versions fail to resolve), and its
+Dockerfile/Swarm path has open reliability issues. The Herokuish path used here is the supported one.
+
+Railway and Fly.io work the same way — any host that runs `npm start` and gives you HTTPS. Fly.io
+needs a Dockerfile; ask if you want one added to the repo.
 
 ### Public hosting notes
 
