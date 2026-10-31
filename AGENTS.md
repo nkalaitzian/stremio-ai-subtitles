@@ -18,7 +18,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 - **Location:** `D:\Development\stremio-ai-subtitles` (moved here from `C:\Users\nikos\.deepseek` — do not look for it there)
 - **GitHub:** https://github.com/nkalaitzian/stremio-ai-subtitles (public, `main` branch, origin set)
 - **gh CLI:** authenticated as `nkalaitzian`. **git identity:** Nikos Kalaitzian <nikoskalai@gmail.com>
-- **Version:** 1.1.6 (manifest + package.json — keep in sync)
+- **Version:** 1.1.7 (manifest + package.json — keep in sync)
 - **Stack:** Node.js ≥18 (tested on Node 26), Express 4, **zero other runtime deps** (uses global `fetch`, `crypto`, `fs`). CommonJS.
 - **Environment:** Windows (PowerShell), user locale Europe/Athens (Greek default target language is intentional).
 
@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 64/64 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 65/65 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -220,12 +220,15 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
 - v1.1.6 shows the addon version (`v1.1.6`) under the title on the `/configure` page. The version
   is read from `package.json` via `config.VERSION`, so the manifest, the config page and the npm
   package can never drift apart.
+- v1.1.7 adds a "Copy Link" button next to "Install in Stremio" on the public `/configure` page
+  (the copy button stays for localhost, where `stremio://` is unusable, and on the gear page, where
+  installing would duplicate the add-on).
 - Added `.github/workflows/deploy.yml`: runs the E2E tests, then force-pushes the tagged commit to
   BeamUp (`dokku@a.baby-beamup.club:<hash>/stremio-ai-subtitles`) on **tag pushes** (any tag) and
   manual `workflow_dispatch` — normal pushes to main do not deploy. BeamUp auth is a dedicated SSH
   key whose public half is on the GitHub account; the private half lives in the `BEAMUP_SSH_KEY`
   repo secret.
-- All tests pass: **64/64** (`npm test`). Nothing is currently broken or in progress.
+- All tests pass: **65/65** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),

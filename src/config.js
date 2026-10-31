@@ -347,6 +347,9 @@ function configureHtml(initialConfig) {
   textarea { resize: vertical; }
   button { background: #8a5aab; color: #fff; border: 0; border-radius: 8px; padding: 12px 22px; font-size: 1rem; font-weight: 600; cursor: pointer; }
   button:hover { background: #9b68bd; }
+  button[hidden] { display: none; }
+  button.copy-link { display: block; background: none; color: #a98bd6; font-size: .9rem; font-weight: 500; padding: 8px 0; text-decoration: underline; }
+  button.copy-link:hover { background: none; color: #c3a6e0; }
   .url { margin-top: 18px; font-size: .8rem; color: #9a9ab0; word-break: break-all; }
   .hint { font-size: .78rem; color: #7f7f95; margin-top: 6px; }
   .links { margin-top: 20px; padding-top: 14px; border-top: 1px solid #3d3d4d; font-size: .82rem; color: #7f7f95; }
@@ -361,7 +364,8 @@ function configureHtml(initialConfig) {
   <p class="sub">${subText}</p>
   <form id="form" onsubmit="return false;">
     ${fields}
-    <button id="install">Install in Stremio</button>
+    <button id="install" type="button">Install in Stremio</button>
+    <button id="copy" type="button" class="copy-link">Copy Link</button>
   </form>
   <div class="url" id="url"></div>
   <p class="hint">Paste the URL above into Stremio → Addons → "Add addon". Stremio accepts plain http:// only for 127.0.0.1 addresses — make sure the addon server is running.</p>
@@ -389,30 +393,32 @@ function configureHtml(initialConfig) {
     const path = buildPath();
     const plainUrl = location.protocol + '//' + location.host + '/' + path + '/manifest.json';
     const isLocal = ['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
-    const btn = document.getElementById('install');
+    const installBtn = document.getElementById('install');
+    const copyBtn = document.getElementById('copy');
     document.getElementById('url').textContent = 'Addon URL: ' + plainUrl;
-    if (INITIAL) {
-      // Opened from the gear on an installed add-on: nothing can update the
-      // installed transport URL in place, so hand over the new URL to re-add.
-      btn.textContent = 'Copy updated addon URL';
-      btn.onclick = () => {
-        navigator.clipboard.writeText(plainUrl)
-          .then(() => { btn.textContent = 'Copied — remove the old install, then paste this URL'; })
-          .catch(() => { window.prompt('Copy this URL and paste it into Stremio:', plainUrl); });
-      };
-    } else if (isLocal) {
-      // stremio:// deep links are rewritten to https:// by the app, which fails
-      // on a plain-HTTP local server — so copy the http:// URL instead.
-      btn.textContent = 'Copy addon URL';
-      btn.onclick = () => {
-        navigator.clipboard.writeText(plainUrl)
-          .then(() => { btn.textContent = 'Copied — paste it into Stremio'; })
-          .catch(() => { window.prompt('Copy this URL and paste it into Stremio:', plainUrl); });
-      };
-    } else {
-      btn.textContent = 'Install in Stremio';
-      btn.onclick = () => { location.href = 'stremio://' + location.host + '/' + path + '/manifest.json'; };
+
+    // stremio:// deep links are rewritten to https:// by the app, which fails on
+    // a plain-HTTP local server. And on the gear page (an installed add-on) the
+    // new URL would install as a second add-on, so only offer copy there.
+    const canInstall = !INITIAL && !isLocal;
+    installBtn.hidden = !canInstall;
+    if (canInstall) {
+      installBtn.textContent = 'Install in Stremio';
+      installBtn.onclick = () => { location.href = 'stremio://' + location.host + '/' + path + '/manifest.json'; };
     }
+
+    const copyLabel = INITIAL ? 'Copy updated addon URL' : 'Copy Link';
+    copyBtn.textContent = copyLabel;
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(plainUrl)
+        .then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => {
+            if (copyBtn.textContent === 'Copied!') copyBtn.textContent = copyLabel;
+          }, 1500);
+        })
+        .catch(() => { window.prompt('Copy this URL and paste it into Stremio:', plainUrl); });
+    };
   }
   // Remember the non-secret fields between visits so reconfiguring doesn't mean
   // retyping everything. API keys are never persisted.
