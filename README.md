@@ -151,3 +151,8 @@ Set `HOST=0.0.0.0` to listen on all interfaces (default). Then share/install
 ## License
 
 MIT — use it, fork it, host it.
+
+---
+
+> 🤖 **For AI assistants:** start by reading [AGENTS.md](AGENTS.md) — it contains the full project
+> context, architecture, protocol knowledge and current state needed to continue development.
