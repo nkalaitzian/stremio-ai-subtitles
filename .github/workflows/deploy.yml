@@ -2,7 +2,7 @@ name: Test & deploy to BeamUp
 
 on:
   push:
-    tags: ['*']
+    tags: ['**']
   workflow_dispatch:
 
 permissions:
