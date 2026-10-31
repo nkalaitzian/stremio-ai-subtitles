@@ -214,22 +214,10 @@ function configSchema() {
       default: '',
       required: true,
     },
-    {
-      key: 'osUsername',
-      type: 'text',
-      title: 'OpenSubtitles.com username (the login for your account)',
-      default: '',
-    },
-    {
-      key: 'osPassword',
-      type: 'password',
-      title: 'OpenSubtitles.com password',
-      default: '',
-    },
   ];
 }
 
-const CONFIG_KEYS = ['provider', 'apiKey', 'targetLang', 'prompt', 'sourceLang', 'model', 'baseUrl', 'osApiKey', 'osUsername', 'osPassword'];
+const CONFIG_KEYS = ['provider', 'apiKey', 'targetLang', 'prompt', 'sourceLang', 'model', 'baseUrl', 'osApiKey'];
 
 // ---------------------------------------------------------------------------
 // Parse the configured values. Stremio ships the chosen config to the addon as
@@ -282,8 +270,6 @@ function resolveConfig(raw) {
     provider,
     apiKey: typeof raw.apiKey === 'string' ? raw.apiKey.trim() : '',
     osApiKey: typeof raw.osApiKey === 'string' ? raw.osApiKey.trim() : '',
-    osUsername: typeof raw.osUsername === 'string' ? raw.osUsername.trim() : '',
-    osPassword: typeof raw.osPassword === 'string' ? raw.osPassword : '',
     model: typeof raw.model === 'string' ? raw.model.trim() : '',
     baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl.trim().replace(/\/+$/, '') : '',
     targetCode,

@@ -32,10 +32,9 @@ Stremio player ──▶ addon /subtitles/...json ──▶ OpenSubtitles (find 
 ## Requirements
 
 - Node.js **18+** (tested with Node 26).
-- An **OpenSubtitles.com account** (free): its **API key**
-  ([opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers)) plus your account
-  **username and password** (the login you use on opensubtitles.com). The API key finds subtitles;
-  the username/password let the addon download them under your account's quota.
+- A free **OpenSubtitles.com API key**
+  ([opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers)) — one key covers both
+  finding and downloading subtitles (no account username/password needed).
 - An API key for the AI provider you pick (not needed for Google Translate, local Ollama/LM Studio,
   or a self-hosted LibreTranslate).
 
@@ -52,8 +51,7 @@ Then in Stremio:
 1. Go to **Addons → Add addon** and paste `http://127.0.0.1:7000/manifest.json`
    (Stremio accepts plain HTTP only for `127.0.0.1`).
 2. The **configuration screen** opens: pick the AI provider, paste its API key, choose the target
-   language, adjust the prompt, and fill the three OpenSubtitles fields (API key, username,
-   password).
+   language, adjust the prompt, and paste your OpenSubtitles API key.
 3. Install, play any movie/episode and open the **subtitles menu** (speech-bubble icon in the player).
    Under your target language you'll see the addon's variants:
    - **AI translate (best match)** — automatically picks the best source subtitle,
@@ -76,9 +74,7 @@ Then in Stremio:
 | **Source subtitle language** | dropdown | Which original subtitle to translate from (`auto` prefers English) |
 | **Model name** | text | Overrides the provider's default model |
 | **API base URL** | text | Overrides the provider's default endpoint (needed for custom/Ollama/LM Studio) |
-| **OpenSubtitles.com API key** | password | Free key used to find subtitles (opensubtitles.com/consumers) |
-| **OpenSubtitles.com username** | text | Your opensubtitles.com account login (used only for downloading) |
-| **OpenSubtitles.com password** | password | Your opensubtitles.com account password |
+| **OpenSubtitles.com API key** | password | Free key used to find & fetch the original subtitles |
 
 Defaults per provider: OpenAI `gpt-4o-mini` · DeepSeek `deepseek-chat` · Grok `grok-3` ·
 OpenRouter `openai/gpt-4o-mini` · Anthropic `claude-sonnet-4-5` · Gemini `gemini-2.5-flash` ·
@@ -144,8 +140,7 @@ Set `HOST=0.0.0.0` to listen on all interfaces (default). Then share/install
   video hash *and* its IMDb id (for episodes: the show id + season/episode). Try another
   release/stream, or set a specific source language.
 - **"OpenSubtitles search failed … check your API key"** — the OpenSubtitles.com **API key** is
-  wrong or has no access. A **"login failed … username and password"** on download means your
-  opensubtitles.com **username/password** are wrong. These are separate credentials.
+  wrong or has no access. A **wrong key** also shows as a search/download error, not "no subtitles".
 - **Translation is out of sync or badly transcribed** — open the subtitle menu and pick a different
   source variant (*AI from …* tracks); each one is a different source subtitle file. If the config's
   **Source subtitle language** is set to a specific language, only variants of that language appear.

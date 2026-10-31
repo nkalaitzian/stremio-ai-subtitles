@@ -28,19 +28,18 @@ translate.setCacheDir(path.join(CACHE_DIR, 'tr'));
 OpenSubtitles.setSourceCacheDir(path.join(CACHE_DIR, 'src'));
 
 const osClients = new Map();
-function getOSClient(apiKey, username, password) {
+function getOSClient(apiKey) {
   if (!apiKey) return null;
-  const key = `${apiKey}\u0000${username || ''}\u0000${password || ''}`;
-  if (!osClients.has(key)) {
-    osClients.set(key, new OpenSubtitles(apiKey, username, password, process.env.OPENSUBTITLES_BASE));
+  if (!osClients.has(apiKey)) {
+    osClients.set(apiKey, new OpenSubtitles(apiKey, process.env.OPENSUBTITLES_BASE));
   }
-  return osClients.get(key);
+  return osClients.get(apiKey);
 }
 
 function buildManifest(configured) {
   const manifest = {
     id: 'com.stremio.aisubtitletranslator',
-    version: '1.1.2',
+    version: '1.1.3',
     name: 'AI Subtitle Translator',
     description: 'Translates subtitles to a language you pick, using AI providers (OpenAI, Anthropic, DeepSeek, Grok, Gemini, DeepL and more).',
     resources: ['subtitles'],
@@ -148,8 +147,6 @@ function buildTrackUrl(base, cfg, type, id, videoHash, videoSize, candidate) {
     baseUrl: cfg.baseUrl || '',
     apiKey: cfg.apiKey || '',
     osKey: cfg.osApiKey || '',
-    osUser: cfg.osUsername || '',
-    osPass: cfg.osPassword || '',
     prompt: cfg.prompt,
   });
   if (candidate) {
@@ -276,7 +273,7 @@ async function subtitlesHandler(req, res) {
       'AI Subtitle Translator: no OpenSubtitles.com API key is configured. Reinstall the addon and set one (free at opensubtitles.com/consumers).');
   }
 
-  const os = getOSClient(cfg.osApiKey, cfg.osUsername, cfg.osPassword);
+  const os = getOSClient(cfg.osApiKey);
   const { imdbId, season, episode } = parseVideoId(id);
   try {
     const candidates = await os.searchBest({
@@ -322,7 +319,7 @@ app.get('/subtitle.vtt', async (req, res) => {
 
   try {
     if (!q.osKey) throw new Error('OpenSubtitles.com API key is not configured');
-    const os = getOSClient(q.osKey, q.osUser, q.osPass);
+    const os = getOSClient(q.osKey);
 
     let candidate;
     if (!q.fileId || q.mode === 'auto') {

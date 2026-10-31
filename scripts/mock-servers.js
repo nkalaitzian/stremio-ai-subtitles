@@ -42,18 +42,11 @@ function createOSMock() {
   const stats = { loginCalls: 0, searchCalls: 0, downloadCalls: 0, fileFetches: 0, searches: [] };
 
   app.post('/api/v1/login', (req, res) => {
+    // The addon no longer logs in (the Api-Key is enough), but keep this
+    // endpoint to mirror the real API for completeness.
     stats.loginCalls++;
-    const apiKey = req.headers['api-key'];
-    const body = req.body || {};
-    if (apiKey === 'bad-key') {
+    if (req.headers['api-key'] === 'bad-key') {
       return res.status(401).json({ message: 'Unauthorized' });
-    }
-    // The real API requires username + password; an empty body is a 401.
-    if (!body.username || !body.password) {
-      return res.status(401).json({ message: 'Missing username or password' });
-    }
-    if (body.username !== 'osuser' || body.password !== 'ospass') {
-      return res.status(401).json({ message: 'Invalid credentials' });
     }
     res.json({ token: 'mock-token', status: 200 });
   });
@@ -129,10 +122,9 @@ function createOSMock() {
   app.post('/api/v1/download', (req, res) => {
     stats.downloadCalls++;
     const port = process.env.MOCK_OS_PORT || '8311';
-    // Download requires a logged-in session, like the real API.
-    const auth = req.headers.authorization || '';
-    if (!auth.includes('mock-token')) {
-      return res.status(406).json({ message: 'No session' });
+    // The real download endpoint accepts the Api-Key alone (no login).
+    if (req.headers['api-key'] === 'bad-key') {
+      return res.status(401).json({ message: 'Unauthorized' });
     }
     const fileId = req.body && req.body.file_id ? req.body.file_id : 0;
     if (fileId === 999) {

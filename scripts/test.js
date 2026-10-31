@@ -78,9 +78,9 @@ async function main() {
   check('resources include subtitles', manifest.json && manifest.json.resources.includes('subtitles'));
   check('types include movie and series', manifest.json && manifest.json.types.includes('movie') && manifest.json.types.includes('series'));
   check('configurationRequired is true', manifest.json && manifest.json.behaviorHints.configurationRequired === true);
-  check('manifest version is 1.1.2', manifest.json && manifest.json.version === '1.1.2');
-  check('config schema has provider/apiKey/targetLang/prompt/osApiKey/osUsername/osPassword',
-    manifest.json && ['provider', 'apiKey', 'targetLang', 'prompt', 'osApiKey', 'osUsername', 'osPassword'].every((k) => manifest.json.config.some((c) => c.key === k)));
+  check('manifest version is 1.1.3', manifest.json && manifest.json.version === '1.1.3');
+  check('config schema has provider/apiKey/targetLang/prompt/osApiKey',
+    manifest.json && ['provider', 'apiKey', 'targetLang', 'prompt', 'osApiKey'].every((k) => manifest.json.config.some((c) => c.key === k)));
   check('CORS header present', manifest.headers.get('access-control-allow-origin') === '*');
 
   // ---- 2. /configure -----------------------------------------------------
@@ -99,8 +99,6 @@ async function main() {
     model: 'mock-model',
     baseUrl: `http://127.0.0.1:${MOCK_LLM_PORT}/v1`,
     osApiKey: 'mock-os-key',
-    osUsername: 'osuser',
-    osPassword: 'ospass',
   };
   check('config object built from schema defaults', cfg.provider && cfg.targetLang && cfg.prompt && cfg.sourceLang);
 
@@ -238,34 +236,6 @@ async function main() {
     const badVtt = await get(badTrack.url);
     check('error explains the OpenSubtitles API key failure', badVtt.text.includes('API key'));
     check('error is not disguised as "no subtitles"', !badVtt.text.includes('no source subtitles'));
-  }
-
-  // ---- 7c. Bad login (username/password) -> download reports it ------------
-  console.log('\n[7c] invalid OpenSubtitles login is reported on download');
-  fs.rmSync(path.join(CACHE_DIR, 'src'), { recursive: true, force: true }); // force a real download
-  const cfgBadLogin = { ...cfg, osPassword: 'wrong-password' };
-  const badLoginPath = encodeURIComponent(JSON.stringify(cfgBadLogin));
-  const badLoginRes = await get(`${base}/${badLoginPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
-  const badLoginSubs = badLoginRes.json && badLoginRes.json.subtitles ? badLoginRes.json.subtitles : [];
-  check('search still lists tracks with a bad login (search needs no login)', badLoginSubs.length === 4, `got ${badLoginSubs.length}`);
-  const badLoginAuto = badLoginSubs.find((t) => t.label === 'AI translate (best match)');
-  if (badLoginAuto) {
-    const badLoginVtt = await get(badLoginAuto.url);
-    check('download error explains the login failure', badLoginVtt.text.includes('login failed') && badLoginVtt.text.includes('username and password'));
-  }
-
-  // ---- 7d. Missing username/password -> download asks for them --------------
-  console.log('\n[7d] missing OpenSubtitles username/password');
-  fs.rmSync(path.join(CACHE_DIR, 'src'), { recursive: true, force: true }); // force a real download
-  const cfgNoCreds = { ...cfg, osUsername: '', osPassword: '' };
-  const noCredsPath = encodeURIComponent(JSON.stringify(cfgNoCreds));
-  const noCredsRes = await get(`${base}/${noCredsPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
-  const noCredsSubs = noCredsRes.json && noCredsRes.json.subtitles ? noCredsRes.json.subtitles : [];
-  check('search still lists tracks without credentials', noCredsSubs.length === 4, `got ${noCredsSubs.length}`);
-  const noCredsAuto = noCredsSubs.find((t) => t.label === 'AI translate (best match)');
-  if (noCredsAuto) {
-    const noCredsVtt = await get(noCredsAuto.url);
-    check('download error asks for username and password', noCredsVtt.text.includes('username and password'));
   }
 
   // ---- 8. Missing videoHash -> empty list ---------------------------------

@@ -18,7 +18,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 - **Location:** `D:\Development\stremio-ai-subtitles` (moved here from `C:\Users\nikos\.deepseek` — do not look for it there)
 - **GitHub:** https://github.com/nkalaitzian/stremio-ai-subtitles (public, `main` branch, origin set)
 - **gh CLI:** authenticated as `nkalaitzian`. **git identity:** Nikos Kalaitzian <nikoskalai@gmail.com>
-- **Version:** 1.1.2 (manifest + package.json — keep in sync)
+- **Version:** 1.1.3 (manifest + package.json — keep in sync)
 - **Stack:** Node.js ≥18 (tested on Node 26), Express 4, **zero other runtime deps** (uses global `fetch`, `crypto`, `fs`). CommonJS.
 - **Environment:** Windows (PowerShell), user locale Europe/Athens (Greek default target language is intentional).
 
@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 57/57 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 53/53 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -51,8 +51,9 @@ src/
                      anthropic, gemini, deepl, libretranslate, google.
   opensubtitles.js   OpenSubtitles.com v1 client: search by moviehash/moviebytesize + imdb_id
                      (numeric) or, for episodes, parent_imdb_id + season_number/episode_number.
-                     Search uses only the Api-Key header; downloading requires a JWT obtained by
-                     POST /login {username, password}. On-disk source cache (30-day TTL).
+                     Both search and download authenticate with the Api-Key header alone (the
+                     consumer key is per-account, so no username/password login is needed).
+                     On-disk source cache (30-day TTL).
   subtitleFormat.js  SRT/WebVTT parsing -> cue objects; toVtt(); sanitize() strips tags/ASS overrides;
                      errorVtt() renders in-player error cues.
   translate.js       Chunked translation (≤40 lines or ≤6000 chars per chunk, concurrency 3),
@@ -67,8 +68,8 @@ scripts/
                      manifest, /configure (JSON+HTML), configured manifest, variant track list,
                      OpenSubtitles request format + IMDb fallback, series episode lookup,
                      translated VTT from a chosen source, cache hits, auto-track behavior,
-                     French re-translation, error tracks (missing/invalid API key, invalid login,
-                     missing username/password), empty list, defaults, source-language filtering.
+                     French re-translation, error tracks (missing/invalid API key), empty list,
+                     defaults, source-language filtering.
 .env.example         PORT/HOST/OPENSUBTITLES_BASE/CACHE_DIR (no secrets — keys are per-install config).
 ```
 
@@ -128,10 +129,10 @@ The subtitle list returns one labeled track **per source subtitle** (≤2 per la
 
 ### OpenSubtitles API facts
 - Base `https://api.opensubtitles.com/api/v1` (overridable via `OPENSUBTITLES_BASE` for tests).
-- **Authentication is two-part.** The `Api-Key` header identifies the app; a JWT identifies the
-  user. Search works with the `Api-Key` alone. To **download**, you must first `POST /login` with
-  `{username, password}` (+ `Api-Key`) to get a JWT, then send `Authorization: Bearer <token>`.
-  The API key by itself **cannot** produce a token — an empty login body is a 401.
+- **Authentication is the `Api-Key` header alone** for both search and download. The consumer API
+  key is tied to the user's account, so it carries the download quota — no username/password login
+  is needed (unlike a *shared* app key, which `subliminal`/Bazarr use and therefore also need
+  username/password).
 - Search: `GET /subtitles?moviehash=...&moviebytesize=...&languages=...&type=movie|episode`.
   - `moviehash` is the OpenSubtitles hash Stremio sends as the `videoHash` extra; `moviebytesize`
     is the `videoSize` extra.
@@ -140,15 +141,14 @@ The subtitle list returns one labeled track **per source subtitle** (≤2 per la
     `parent_imdb_id` (the show, numeric) + `season_number` + `episode_number`. Using `imdb_id`
     alone for an episode returns nothing.
   - There is no `video_hash` parameter: unknown names are ignored and yield zero results silently.
-- Download: `POST /download {file_id}` → `{link, remaining,...}`; then GET the link. Error codes:
-  **406 = "No session"** (missing/expired token → re-login and retry), **407 = daily quota
-  exhausted** (surfaced as a friendly error cue). Do not swap these two.
+- Download: `POST /download {file_id}` → `{link, remaining,...}`; then GET the link. **407 =
+  daily quota exhausted** (surfaced as a friendly error cue); 401/403/406 = bad key / no access.
 - `searchBest` scoring: prefer non-hearing-impaired (+2), non-machine-translated (+1),
   + download_count/1000; dedupe by file_id; limit 15. Language code normalization maps
   `pb`→`pt-BR`, `zh-tw`→`zh-TW`, etc.
 - If every search attempt fails (bad key, network, malformed request), `searchBest` throws the
-  underlying error instead of returning `[]`, so the player sees "API key" / "login failed"
-  rather than "no subtitles".
+  underlying error instead of returning `[]`, so the player sees "check your API key" rather than
+  "no subtitles".
 
 ### Error handling philosophy
 Never return HTTP 500 to the player for subtitle-list problems. Return a **track whose VTT is an
@@ -161,9 +161,8 @@ errors.
 Order matters (user-requested fields first): `provider` (select), `apiKey` (password),
 `targetLang` (select, default `el – Greek`), `prompt` (text, default in `config.js`; the HTML page
 renders it as a textarea), then `sourceLang` (select, default `auto`), `model`, `baseUrl`,
-`osApiKey` (password, required), `osUsername` (text), `osPassword` (password). Select options are
-plain strings `"code – Name"`; code parsed before ` – `. `{targetLang}` in the prompt is replaced
-with `Name (code)`.
+`osApiKey` (password, required). Select options are plain strings `"code – Name"`; code parsed
+before ` – `. `{targetLang}` in the prompt is replaced with `Name (code)`.
 
 Provider registry (`config.PROVIDERS`): `openai` (gpt-4o-mini), `deepseek` (deepseek-chat,
 **default provider**), `grok` (grok-3, api.x.ai), `openrouter`, `anthropic` (claude-sonnet-4-5),
@@ -185,11 +184,12 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   `video_hash`; numeric `imdb_id`; series via `parent_imdb_id` + season/episode) and made search
   failures report the real error. The old parameters silently returned zero results, which is why
   valid keys still produced "no source subtitles found".
-- v1.1.2 fixed OpenSubtitles authentication: `/login` needs `{username, password}` (the API key
-  alone can't produce a token), search no longer logs in (Api-Key only), download logs in and
-  retries once on 406 "No session", and 407 is correctly treated as the download-quota limit.
-  Added `osUsername` / `osPassword` config fields.
-- All tests pass: **57/57** (`npm test`). Nothing is currently broken or in progress.
+- v1.1.3 removed the username/password login entirely: the per-account consumer API key alone is
+  sufficient for both search and download (verified against the live API — download returns 200
+  with the Api-Key header only). 407 is the download-quota limit. v1.1.2 had wrongly added
+  `osUsername`/`osPassword` based on the `subliminal` client, which needs them only because it uses
+  a shared app key.
+- All tests pass: **53/53** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),
