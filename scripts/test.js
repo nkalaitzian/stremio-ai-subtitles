@@ -74,6 +74,7 @@ async function main() {
   check('resources include subtitles', manifest.json && manifest.json.resources.includes('subtitles'));
   check('types include movie and series', manifest.json && manifest.json.types.includes('movie') && manifest.json.types.includes('series'));
   check('configurationRequired is true', manifest.json && manifest.json.behaviorHints.configurationRequired === true);
+  check('manifest version is 1.1.0', manifest.json && manifest.json.version === '1.1.0');
   check('config schema has provider/apiKey/targetLang/prompt/osApiKey',
     manifest.json && ['provider', 'apiKey', 'targetLang', 'prompt', 'osApiKey'].every((k) => manifest.json.config.some((c) => c.key === k)));
   check('CORS header present', manifest.headers.get('access-control-allow-origin') === '*');
@@ -107,20 +108,34 @@ async function main() {
   check('configured manifest drops configurationRequired',
     confManifest.json && confManifest.json.behaviorHints.configurationRequired === false);
 
-  // ---- 4. Subtitle list ---------------------------------------------------
-  console.log('\n[4] subtitle list with configured values');
+  // ---- 4. Subtitle list with per-source variants --------------------------
+  console.log('\n[4] subtitle list: labeled variants per source subtitle');
   const subsRes = await get(`${base}/${configPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
   check('returns subtitles array', subsRes.json && Array.isArray(subsRes.json.subtitles));
-  const track = subsRes.json && subsRes.json.subtitles && subsRes.json.subtitles[0];
-  check('track has id/url/lang', track && !!track.id && !!track.url && !!track.lang);
-  check('track url points at subtitle.vtt', track && track.url.includes('/subtitle.vtt?'));
-  check('track url embeds config (provider/model/baseUrl)', track && track.url.includes('provider=custom') && track.url.includes('model=mock-model'));
+  const subs = subsRes.json && subsRes.json.subtitles ? subsRes.json.subtitles : [];
+  check('one track per source + one auto track (4 total)', subs.length === 4, `got ${subs.length}`);
+  check('all tracks carry the target language', subs.every((t) => t.lang === cfg.targetLang.split('–')[0].trim()));
+  check('all tracks have a label', subs.every((t) => typeof t.label === 'string' && t.label.length > 0));
+
+  const autoTrack = subs.find((t) => t.label === 'AI translate (best match)');
+  check('auto track is first', subs[0] && subs[0] === autoTrack);
+  check('auto track url uses mode=auto and no fixed file', autoTrack && autoTrack.url.includes('mode=auto') && !autoTrack.url.includes('fileId='));
+
+  const labels = subs.map((t) => t.label).sort();
+  check('English variants are labeled with source names',
+    labels.includes('AI from English — sample') && labels.includes('AI from English — sample2 (HI)'));
+  check('French variant is labeled', labels.includes('AI from French'));
+
+  const frTrack = subs.find((t) => t.label === 'AI from French');
+  const enTrack = subs.find((t) => t.label === 'AI from English — sample');
+  check('source variants embed their file id and config',
+    frTrack && frTrack.url.includes('fileId=43') && frTrack.url.includes('provider=custom') && frTrack.url.includes('model=mock-model'));
   check('list is cacheable', subsRes.headers.get('cache-control') && subsRes.headers.get('cache-control').includes('max-age'));
 
-  // ---- 5. Translated VTT --------------------------------------------------
-  console.log('\n[5] translated VTT');
-  if (track && track.url) {
-    const vtt = await get(track.url);
+  // ---- 5. Translated VTT from an explicit source ---------------------------
+  console.log('\n[5] translated VTT from a chosen source (English variant)');
+  if (enTrack && enTrack.url) {
+    const vtt = await get(enTrack.url);
     check('VTT responds 200', vtt.status === 200);
     check('VTT content type', vtt.headers.get('content-type').includes('text/vtt'));
     check('starts with WEBVTT', vtt.text.startsWith('WEBVTT'));
@@ -128,14 +143,30 @@ async function main() {
     check('contains Greek translation', vtt.text.includes('Γεια σου κόσμε'));
     check('contains all three cues', vtt.text.includes('Τι κάνεις;') && vtt.text.includes('Τα λέμε σύντομα'));
 
-    // ---- 6. Cache hit -----------------------------------------------------
+    // ---- 6. Cache hits -----------------------------------------------------
     console.log('\n[6] translation cache');
-    const before = await get(`http://127.0.0.1:${MOCK_LLM_PORT}/stats`);
-    const vtt2 = await get(track.url);
-    const after = await get(`http://127.0.0.1:${MOCK_LLM_PORT}/stats`);
+    let before = await get(`http://127.0.0.1:${MOCK_LLM_PORT}/stats`);
+    const vtt2 = await get(enTrack.url);
+    let after = await get(`http://127.0.0.1:${MOCK_LLM_PORT}/stats`);
     check('second fetch still serves translated VTT', vtt2.status === 200 && vtt2.text.includes('Γεια σου κόσμε'));
     check('LLM not called again (cache hit)', after.json.translateCalls === before.json.translateCalls,
       `calls before=${before.json.translateCalls} after=${after.json.translateCalls}`);
+
+    console.log('\n[6b] auto track resolves best source and reuses cache');
+    const autoVtt = await get(autoTrack.url);
+    const afterAuto = await get(`http://127.0.0.1:${MOCK_LLM_PORT}/stats`);
+    check('auto track returns translated VTT', autoVtt.status === 200 && autoVtt.text.includes('Γεια σου κόσμε'));
+    check('auto track reuses cached translation of the best source',
+      afterAuto.json.translateCalls === after.json.translateCalls,
+      `calls before=${after.json.translateCalls} after=${afterAuto.json.translateCalls}`);
+
+    console.log('\n[6c] different source (French) translates fresh');
+    const frVtt = await get(frTrack.url);
+    const afterFr = await get(`http://127.0.0.1:${MOCK_LLM_PORT}/stats`);
+    check('French source variant returns translated VTT', frVtt.status === 200 && frVtt.text.startsWith('WEBVTT'));
+    check('French source triggers exactly one new LLM call',
+      afterFr.json.translateCalls === afterAuto.json.translateCalls + 1,
+      `calls before=${afterAuto.json.translateCalls} after=${afterFr.json.translateCalls}`);
   } else {
     check('translated VTT', false, 'no track to fetch');
   }
@@ -147,6 +178,7 @@ async function main() {
   const errRes = await get(`${base}/${noKeyPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
   const errTrack = errRes.json && errRes.json.subtitles && errRes.json.subtitles[0];
   check('error track returned', errTrack && errTrack.id.startsWith('ai-error-'));
+  check('error track is labeled', errTrack && errTrack.label === '⚠ AI Subtitle Translator');
   if (errTrack) {
     const errVtt = await get(errTrack.url);
     check('error VTT explains the problem', errVtt.text.includes('OpenSubtitles'));
@@ -162,6 +194,16 @@ async function main() {
   console.log('\n[9] unconfigured request uses defaults');
   const plain = await get(`${base}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
   check('defaults produce an error track (no OS key)', plain.json && plain.json.subtitles && plain.json.subtitles[0].id.startsWith('ai-error-'));
+
+  // ---- 10. Explicit source language config filters variants ----------------
+  console.log('\n[10] explicit source language filters variants');
+  const cfgFr = { ...cfg, sourceLang: 'fr – French' };
+  const frPath = encodeURIComponent(JSON.stringify(cfgFr));
+  const frRes = await get(`${base}/${frPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
+  const frSubs = frRes.json && frRes.json.subtitles ? frRes.json.subtitles : [];
+  check('only French variants and no auto track',
+    frSubs.length === 1 && frSubs[0].label === 'AI from French' && !frSubs.some((t) => t.label === 'AI translate (best match)'),
+    `labels: ${frSubs.map((t) => t.label).join(' | ')}`);
 
   stopServers();
   console.log(`\n${checks - failures}/${checks} checks passed`);

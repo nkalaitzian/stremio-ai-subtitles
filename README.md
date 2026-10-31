@@ -21,6 +21,9 @@ Stremio player ──▶ addon /subtitles/...json ──▶ OpenSubtitles (find 
 - **API key field** for the chosen provider.
 - **Target language dropdown** (40+ languages).
 - **Prompt text area** — the translation prompt is fully editable and shown on the config screen.
+- **Pick the source subtitle yourself** — every source subtitle found for the video shows up as a
+  labeled track in the subtitle menu (e.g. *AI from English — Movie.2010.srt*, *AI from French*),
+  so when one source is out of sync or badly transcribed you can translate a different one.
 - Source subtitles come from **OpenSubtitles.com** (matched by video hash, so timing is exact).
 - SRT → WebVTT conversion, chunked translation (context-friendly batches), **caching on disk and in
   memory** so re-watching an episode costs no extra API calls, retries with backoff on rate limits.
@@ -47,8 +50,13 @@ Then in Stremio:
    (Stremio accepts plain HTTP only for `127.0.0.1`).
 2. The **configuration screen** opens: pick the AI provider, paste its API key, choose the target
    language, adjust the prompt and paste your OpenSubtitles API key.
-3. Install, play any movie/episode and pick the translated track from the subtitles menu.
-   Translation happens when you select the track (first time only — afterwards it's cached).
+3. Install, play any movie/episode and open the **subtitles menu** (speech-bubble icon in the player).
+   Under your target language you'll see the addon's variants:
+   - **AI translate (best match)** — automatically picks the best source subtitle,
+   - **AI from English — filename**, **AI from French**, … — one variant per source subtitle found,
+     labeled with the source file (`(HI)` = hearing impaired, `(MT)` = machine translated).
+   Selecting a variant starts the translation of that source (first time only — afterwards it's
+   cached). If a translation looks out of sync, pick a different source variant.
 
 > Alternatively open `http://127.0.0.1:7000/configure` in a browser, fill the form there (the prompt
 > field is a real text area) and click **Install in Stremio**.
@@ -128,6 +136,9 @@ Set `HOST=0.0.0.0` to listen on all interfaces (default). Then share/install
   plain HTTP for `127.0.0.1`; anything public must be HTTPS.
 - **"No source subtitles found for this video"** — OpenSubtitles has no entry for this exact release;
   try another release/stream, or set a specific source language.
+- **Translation is out of sync or badly transcribed** — open the subtitle menu and pick a different
+  source variant (*AI from …* tracks); each one is a different source subtitle file. If the config's
+  **Source subtitle language** is set to a specific language, only variants of that language appear.
 - **OpenSubtitles 406 / "daily download limit"** — the free key has a daily download quota; cached
   files are not re-downloaded, and re-watching something you translated before uses no quota.
 - **Google Translate fails with 429** — the free endpoint is rate-limited; prefer a keyed provider.

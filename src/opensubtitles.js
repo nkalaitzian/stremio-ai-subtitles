@@ -113,7 +113,7 @@ class OpenSubtitles {
   // Try hash first (most accurate), then IMDB id, with and without a language
   // filter. Score results: prefer non-hearing-impaired, non-machine-translated
   // subtitles with many downloads.
-  async searchBest({ videoHash, imdbId, type, languages }) {
+  async searchBest({ videoHash, imdbId, type, languages, limit = 15 }) {
     const attempts = [];
     if (languages && languages.length) {
       attempts.push({ video_hash: videoHash, languages: languages.join(',') });
@@ -149,10 +149,10 @@ class OpenSubtitles {
           score,
         });
       }
-      if (byFile.size >= 5) break;
+      if (byFile.size >= limit) break;
     }
     const list = [...byFile.values()].sort((a, b) => b.score - a.score);
-    return list.slice(0, 5);
+    return list.slice(0, limit);
   }
 
   async downloadLink(fileId) {

@@ -39,7 +39,7 @@ function getOSClient(apiKey) {
 function buildManifest(configured) {
   const manifest = {
     id: 'com.stremio.aisubtitletranslator',
-    version: '1.0.0',
+    version: '1.1.0',
     name: 'AI Subtitle Translator',
     description: 'Translates subtitles to a language you pick, using AI providers (OpenAI, Anthropic, DeepSeek, Grok, Gemini, DeepL and more).',
     resources: ['subtitles'],
@@ -120,10 +120,8 @@ function extractImdbId(id) {
   return m ? m[1] : null;
 }
 
-function vttUrl(base, cfg, candidate, type, id, videoHash) {
+function buildTrackUrl(base, cfg, type, id, videoHash, candidate) {
   const qs = new URLSearchParams({
-    fileId: String(candidate.fileId),
-    fileName: candidate.fileName || '',
     id: `${type}:${id}`,
     hash: String(videoHash),
     lang: cfg.targetCode,
@@ -135,7 +133,95 @@ function vttUrl(base, cfg, candidate, type, id, videoHash) {
     osKey: cfg.osApiKey || '',
     prompt: cfg.prompt,
   });
+  if (candidate) {
+    qs.set('fileId', String(candidate.fileId));
+    qs.set('fileName', candidate.fileName || '');
+  } else {
+    // "Auto" variant: the best source is resolved when the track is selected.
+    qs.set('mode', 'auto');
+  }
   return `${base}/subtitle.vtt?${qs.toString()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Track variants: each source subtitle becomes a labeled variant under the
+// target language, so the user can pick which subtitle to translate from.
+// ---------------------------------------------------------------------------
+
+const MAX_SOURCE_LANGUAGES = 6;
+const MAX_PER_LANGUAGE = 2;
+const MAX_SOURCE_TRACKS = 8;
+
+function normalizeOsLang(code) {
+  const c = String(code || '').toLowerCase();
+  const map = { pb: 'pt-BR', 'pt-br': 'pt-BR', 'zh-cn': 'zh', 'zh-tw': 'zh-TW', zt: 'zh-TW' };
+  return map[c] || c;
+}
+
+function trimFileName(fileName, max) {
+  const base = String(fileName || '').replace(/\.(srt|vtt|ass|ssa)$/i, '');
+  if (!base) return '';
+  if (base.length <= max) return base;
+  return `${base.slice(0, Math.max(1, max - 1))}…`;
+}
+
+function variantLabel(candidate, langName, duplicate) {
+  let label = `AI from ${langName}`;
+  if (duplicate) {
+    const name = trimFileName(candidate.fileName, 24);
+    label += name ? ` — ${name}` : ` — #${candidate.fileId}`;
+  }
+  if (candidate.hi) label += ' (HI)';
+  if (candidate.machine) label += ' (MT)';
+  return label;
+}
+
+function buildVariantTracks(base, cfg, candidates, type, id, videoHash) {
+  const hash8 = String(videoHash).slice(0, 8);
+  const tracks = [];
+  const withAutoTrack = cfg.sourceCode === 'auto';
+
+  let pool = candidates;
+  if (!withAutoTrack) {
+    // A specific source language is configured: prefer only that language.
+    const filtered = candidates.filter((c) =>
+      normalizeOsLang(c.language).startsWith(cfg.sourceCode.toLowerCase()));
+    if (filtered.length) pool = filtered;
+  }
+
+  // One variant per source subtitle, grouped by source language (best first).
+  const byLang = new Map();
+  for (const c of pool) {
+    const langKey = normalizeOsLang(c.language);
+    if (!byLang.has(langKey)) byLang.set(langKey, []);
+    if (byLang.get(langKey).length < MAX_PER_LANGUAGE) byLang.get(langKey).push(c);
+  }
+  const langs = [...byLang.keys()].sort(
+    (a, b) => (byLang.get(b)[0]?.score || 0) - (byLang.get(a)[0]?.score || 0));
+
+  for (const langKey of langs.slice(0, MAX_SOURCE_LANGUAGES)) {
+    const list = byLang.get(langKey);
+    const langName = config.nameForCode(langKey);
+    for (const c of list) {
+      if (tracks.length >= MAX_SOURCE_TRACKS) break;
+      tracks.push({
+        id: `ai-${cfg.providerId}-${cfg.targetCode}-${c.fileId}-${hash8}`,
+        url: buildTrackUrl(base, cfg, type, id, videoHash, c),
+        lang: cfg.targetCode,
+        label: variantLabel(c, langName, list.length > 1),
+      });
+    }
+  }
+
+  if (withAutoTrack) {
+    tracks.unshift({
+      id: `ai-${cfg.providerId}-${cfg.targetCode}-auto-${hash8}`,
+      url: buildTrackUrl(base, cfg, type, id, videoHash, null),
+      lang: cfg.targetCode,
+      label: 'AI translate (best match)',
+    });
+  }
+  return tracks;
 }
 
 async function subtitlesHandler(req, res) {
@@ -161,6 +247,7 @@ async function subtitlesHandler(req, res) {
       id: `ai-error-${code}`,
       url: `${base}/subtitle.vtt?error=${encodeURIComponent(code)}&lang=${encodeURIComponent(cfg.targetCode)}&msg=${encodeURIComponent(message)}`,
       lang: cfg.targetCode,
+      label: '⚠ AI Subtitle Translator',
     }],
   });
 
@@ -176,16 +263,13 @@ async function subtitlesHandler(req, res) {
       imdbId: extractImdbId(id),
       type: type === 'movie' ? 'movie' : 'episode',
       languages: cfg.sourceCode === 'auto' ? null : [cfg.sourceCode],
+      limit: 15,
     });
     if (!candidates.length) {
       return makeErrorTrack('no-subs',
         `AI Subtitle Translator: no source subtitles found for this video (hash ${videoHash.slice(0, 8)}…).`);
     }
-    const subtitles = candidates.slice(0, 3).map((c) => ({
-      id: `ai-${cfg.providerId}-${cfg.targetCode}-${c.fileId}-${String(videoHash).slice(0, 8)}`,
-      url: vttUrl(base, cfg, c, type, id, videoHash),
-      lang: cfg.targetCode,
-    }));
+    const subtitles = buildVariantTracks(base, cfg, candidates, type, id, videoHash);
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-if-error=86400');
     res.json({ subtitles });
   } catch (err) {
@@ -214,10 +298,25 @@ app.get('/subtitle.vtt', async (req, res) => {
 
   try {
     if (!q.osKey) throw new Error('OpenSubtitles.com API key is not configured');
-    if (!q.fileId) throw new Error('Subtitle track is missing its file id');
-
     const os = getOSClient(q.osKey);
-    const { content } = await os.fetchFile({ fileId: q.fileId, fileName: q.fileName });
+
+    let candidate;
+    if (!q.fileId || q.mode === 'auto') {
+      // "Best match" variant: resolve the best source right now.
+      const [type, videoId] = String(q.id || '').split(':');
+      const found = await os.searchBest({
+        videoHash: q.hash,
+        imdbId: extractImdbId(videoId),
+        type: type === 'movie' ? 'movie' : 'episode',
+        languages: q.source && q.source !== 'auto' ? [q.source] : null,
+      });
+      candidate = found[0];
+      if (!candidate) throw new Error('No source subtitles found for this video');
+    } else {
+      candidate = { fileId: q.fileId, fileName: q.fileName };
+    }
+
+    const { content } = await os.fetchFile(candidate);
     const parsed = subtitleFormat.parseSubtitle(content);
     if (!parsed.cues.length) throw new Error('No subtitle cues could be parsed from the source file');
 
@@ -238,7 +337,7 @@ app.get('/subtitle.vtt', async (req, res) => {
       });
     }
 
-    res.setHeader('Cache-Control', 'public, max-age=604800');
+    res.setHeader('Cache-Control', q.mode === 'auto' ? 'public, max-age=86400' : 'public, max-age=604800');
     res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
     res.send(subtitleFormat.toVtt(outCues));
   } catch (err) {

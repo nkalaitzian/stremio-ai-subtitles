@@ -21,6 +21,19 @@ How are you?
 See you soon.
 `;
 
+const FRENCH_SRT = `1
+00:00:01,000 --> 00:00:03,000
+Bonjour tout le monde
+
+2
+00:00:04,000 --> 00:00:06,500
+Comment ça va ?
+
+3
+00:00:07,000 --> 00:00:09,000
+À bientôt
+`;
+
 const FIXTURE_TRANSLATIONS = ['Γεια σου κόσμε', 'Τι κάνεις;', 'Τα λέμε σύντομα'];
 
 function createOSMock() {
@@ -37,19 +50,45 @@ function createOSMock() {
     stats.searchCalls++;
     if (req.query.video_hash === 'deadbeef' || req.query.imdb_id === 'tt0000001') {
       return res.json({
-        total_count: 1,
-        data: [{
-          id: '1',
-          type: 'subtitle',
-          attributes: {
-            subtitle_id: '1',
-            language: 'en',
-            download_count: 500,
-            hearing_impaired: false,
-            machine_translated: false,
-            files: [{ file_id: 42, file_name: 'sample.srt' }],
+        total_count: 3,
+        data: [
+          {
+            id: '1',
+            type: 'subtitle',
+            attributes: {
+              subtitle_id: '1',
+              language: 'en',
+              download_count: 500,
+              hearing_impaired: false,
+              machine_translated: false,
+              files: [{ file_id: 42, file_name: 'sample.srt' }],
+            },
           },
-        }],
+          {
+            id: '2',
+            type: 'subtitle',
+            attributes: {
+              subtitle_id: '2',
+              language: 'en',
+              download_count: 100,
+              hearing_impaired: true,
+              machine_translated: false,
+              files: [{ file_id: 44, file_name: 'sample2.srt' }],
+            },
+          },
+          {
+            id: '3',
+            type: 'subtitle',
+            attributes: {
+              subtitle_id: '3',
+              language: 'fr',
+              download_count: 300,
+              hearing_impaired: false,
+              machine_translated: false,
+              files: [{ file_id: 43, file_name: 'sample.fr.srt' }],
+            },
+          },
+        ],
       });
     }
     res.json({ total_count: 0, data: [] });
@@ -58,8 +97,9 @@ function createOSMock() {
   app.post('/api/v1/download', (req, res) => {
     stats.downloadCalls++;
     const port = process.env.MOCK_OS_PORT || '8311';
+    const fileId = req.body && req.body.file_id ? req.body.file_id : 0;
     res.json({
-      link: `http://127.0.0.1:${port}/file.srt`,
+      link: `http://127.0.0.1:${port}/file.srt?fileId=${fileId}`,
       file_name: 'sample.srt',
       remaining: 99,
     });
@@ -68,7 +108,7 @@ function createOSMock() {
   app.get('/file.srt', (req, res) => {
     stats.fileFetches++;
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.send(FIXTURE_SRT);
+    res.send(req.query.fileId === '43' ? FRENCH_SRT : FIXTURE_SRT);
   });
 
   app.get('/stats', (req, res) => res.json(stats));
@@ -82,9 +122,15 @@ function createLLMMock() {
 
   app.post('/v1/chat/completions', (req, res) => {
     translateCalls++;
+    let count = FIXTURE_TRANSLATIONS.length;
+    try {
+      const user = (req.body.messages || []).find((m) => m.role === 'user');
+      count = JSON.parse(user.content).length;
+    } catch (e) { /* keep default */ }
+    const out = Array.from({ length: count }, (_, i) => FIXTURE_TRANSLATIONS[i % FIXTURE_TRANSLATIONS.length]);
     res.json({
       id: 'chatcmpl-mock',
-      choices: [{ message: { role: 'assistant', content: JSON.stringify(FIXTURE_TRANSLATIONS) } }],
+      choices: [{ message: { role: 'assistant', content: JSON.stringify(out) } }],
     });
   });
 
@@ -92,4 +138,4 @@ function createLLMMock() {
   return app;
 }
 
-module.exports = { createOSMock, createLLMMock, FIXTURE_SRT, FIXTURE_TRANSLATIONS };
+module.exports = { createOSMock, createLLMMock, FIXTURE_SRT, FRENCH_SRT, FIXTURE_TRANSLATIONS };
