@@ -74,6 +74,10 @@ scripts/
                      defaults, source-language filtering, provider defaults (deepseek with an
                      empty model), and the early ⚠ cue for failed chunks.
 .env.example         PORT/HOST/OPENSUBTITLES_BASE/CACHE_DIR (no secrets — keys are per-install config).
+.github/
+  FUNDING.yml        Sponsorship links (Ko-fi: pastouris)
+  workflows/deploy.yml  CI: `npm test`, then deploy to BeamUp when a tag is pushed
+                        (manual `workflow_dispatch` too). Needs the BEAMUP_SSH_KEY secret.
 ```
 
 ## 4. Stremio protocol knowledge (hard-won — do not re-research)
@@ -198,6 +202,11 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   missed it because they used `custom` with an explicit base URL). `translateChunk` now accepts
   both names. Translation failures now show the ⚠ cue at the **start** of the video instead of the
   end.
+- Added `.github/workflows/deploy.yml`: runs the E2E tests, then force-pushes the tagged commit to
+  BeamUp (`dokku@a.baby-beamup.club:<hash>/stremio-ai-subtitles`) on **tag pushes** (any tag) and
+  manual `workflow_dispatch` — normal pushes to main do not deploy. BeamUp auth is a dedicated SSH
+  key whose public half is on the GitHub account; the private half lives in the `BEAMUP_SSH_KEY`
+  repo secret.
 - All tests pass: **61/61** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
@@ -210,7 +219,8 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   skip AI translation when a human subtitle already exists). Discussed with the user; design not
   agreed.
 - Filename (`query=`) search fallback for local files without an IMDb id.
-- GitHub Actions CI running `npm test`; Dockerfile; addon logo/background images; config-screen
+- GitHub Actions deploy workflow (`npm test` + BeamUp) is in place; still open: Dockerfile for
+  Fly.io/VPS; addon logo/background images; config-screen
   screenshot in README; per-provider formality options; caching translated VTTs keyed by video
   hash; support for the user supplying their own subtitle URL as source.
 

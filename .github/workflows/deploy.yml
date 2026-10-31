@@ -1,0 +1,67 @@
+name: Test & deploy to BeamUp
+
+on:
+  push:
+    tags: ['*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  deploy:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: beamup-deploy
+      cancel-in-progress: false
+    env:
+      BEAMUP_HOST: a.baby-beamup.club
+      BEAMUP_PROJECT: stremio-ai-subtitles
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check for the deploy key
+        id: key
+        env:
+          KEY: ${{ secrets.BEAMUP_SSH_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::BEAMUP_SSH_KEY is not set — skipping the BeamUp deploy. See README (Automatic deploys)."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Set up the deploy key
+        if: steps.key.outputs.skip != 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.BEAMUP_SSH_KEY }}
+      - name: Trust the BeamUp host
+        if: steps.key.outputs.skip != 'true'
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$BEAMUP_HOST" >> ~/.ssh/known_hosts
+      - name: Deploy
+        if: steps.key.outputs.skip != 'true'
+        run: |
+          # BeamUp authenticates a deploy key against the GitHub account's public
+          # keys, so sync those first, then push the current commit to the app.
+          npm install -g beamup-cli
+          beamup config "$BEAMUP_HOST" "$GITHUB_REPOSITORY_OWNER"
+          HASH=$(printf '%s\n' "${GITHUB_REPOSITORY_OWNER,,}" | sha256sum | cut -c1-12)
+          git remote add beamup "dokku@${BEAMUP_HOST}:${HASH}/${BEAMUP_PROJECT}"
+          git push beamup HEAD:master --force

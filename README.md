@@ -182,8 +182,38 @@ the add-on's `PORT` handling is what it needs. Caveats as of late 2026: BeamUp's
 **22.11.0** (older than current security releases; newer major versions fail to resolve), and its
 Dockerfile/Swarm path has open reliability issues. The Herokuish path used here is the supported one.
 
+#### Automatic deploys from GitHub
+
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs the test suite and then deploys
+to BeamUp **when you push a tag** (and on manual `workflow_dispatch`, which is handy for redeploying
+the currently selected branch/tag). Normal pushes to `main` do not deploy.
+
+One-time setup:
+
+1. Create a dedicated key (don't reuse your personal one):
+   ```bash
+   ssh-keygen -t ed25519 -f beamup_deploy -C "beamup-ci" -N ""
+   ```
+2. Add **`beamup_deploy.pub`** to GitHub → *Settings → SSH and GPG keys*. BeamUp syncs a deploy's
+   allowed keys from your GitHub account, so this is what authorises CI.
+3. Add the **private** key as a repository secret named **`BEAMUP_SSH_KEY`**
+   (repo → *Settings → Secrets and variables → Actions → New repository secret*).
+4. Release by tagging the commit you want live:
+   ```bash
+   git tag v1.1.5
+   git push origin v1.1.5
+   ```
+
+The workflow then runs `npm test` and `git push`es that tagged commit to BeamUp's `master` (the same
+thing `beamup deploy` does). Tag names are free-form — `v1.1.5` and `1.1.5` both work.
+
+If you rename the BeamUp project, update `BEAMUP_PROJECT` in the workflow; the URL changes with it.
+If you also want tests to run on pushes/PRs *without* deploying, add a second workflow triggered by
+`pull_request`/`push` that only runs `npm test`.
+
 Railway and Fly.io work the same way — any host that runs `npm start` and gives you HTTPS. Fly.io
-needs a Dockerfile; ask if you want one added to the repo.
+needs a Dockerfile; ask if you want one added to the repo. (Render doesn't need a workflow at all —
+it redeploys automatically when you connect the repo.)
 
 ### Public hosting notes
 
