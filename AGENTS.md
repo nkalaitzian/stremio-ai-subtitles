@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 56/56 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 57/57 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -189,7 +189,7 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   alone can't produce a token), search no longer logs in (Api-Key only), download logs in and
   retries once on 406 "No session", and 407 is correctly treated as the download-quota limit.
   Added `osUsername` / `osPassword` config fields.
-- All tests pass: **56/56** (`npm test`). Nothing is currently broken or in progress.
+- All tests pass: **57/57** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),

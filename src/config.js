@@ -310,7 +310,12 @@ function configureHtml() {
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   const fields = schema.map((entry) => {
-    const title = `<label for="${entry.key}">${esc(entry.title)}</label>`;
+    // Linkify any "opensubtitles.com/consumers" reference in the field labels.
+    const labelText = esc(entry.title).replace(
+      /opensubtitles\.com\/consumers/g,
+      '<a href="https://www.opensubtitles.com/en/consumers" target="_blank" rel="noopener">opensubtitles.com/consumers</a>'
+    );
+    const title = `<label for="${entry.key}">${labelText}</label>`;
     if (entry.type === 'select') {
       const opts = entry.options.map((o) => {
         const selected = o === entry.default ? ' selected' : '';
@@ -339,6 +344,7 @@ function configureHtml() {
   p.sub { color: #9a9ab0; margin: 0 0 20px; font-size: .9rem; }
   .field { margin-bottom: 16px; }
   label { display: block; font-size: .85rem; color: #c9c9dd; margin-bottom: 6px; }
+  label a { color: #a98bd6; }
   input, select, textarea { width: 100%; box-sizing: border-box; background: #1b1b23; color: #eee; border: 1px solid #3d3d4d; border-radius: 8px; padding: 10px; font-size: .95rem; font-family: inherit; }
   textarea { resize: vertical; }
   button { background: #8a5aab; color: #fff; border: 0; border-radius: 8px; padding: 12px 22px; font-size: 1rem; font-weight: 600; cursor: pointer; }
