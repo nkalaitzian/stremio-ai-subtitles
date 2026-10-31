@@ -342,23 +342,37 @@ function configureHtml() {
     <button id="install">Install in Stremio</button>
   </form>
   <div class="url" id="url"></div>
-  <p class="hint">The install link opens the Stremio app. You can also copy the link below and paste it into Stremio's "Add addon" box.</p>
+  <p class="hint">Paste the URL above into Stremio → Addons → "Add addon". Stremio accepts plain http:// only for 127.0.0.1 addresses — make sure the addon server is running.</p>
 </div>
 <script>
   const keys = ${JSON.stringify(schema.map((e) => e.key))};
-  function buildLink() {
+  function buildPath() {
     const config = {};
     for (const k of keys) {
       const el = document.getElementById(k);
       config[k] = el ? el.value : '';
     }
-    const path = encodeURIComponent(JSON.stringify(config));
-    return 'stremio://' + location.host + '/' + path + '/manifest.json';
+    return encodeURIComponent(JSON.stringify(config));
   }
   function refresh() {
-    const link = buildLink();
-    document.getElementById('install').onclick = () => { location.href = link; };
-    document.getElementById('url').textContent = 'Addon URL: ' + link.replace(/^stremio:\\/\\//, 'https://');
+    const path = buildPath();
+    const plainUrl = location.protocol + '//' + location.host + '/' + path + '/manifest.json';
+    const isLocal = ['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
+    const btn = document.getElementById('install');
+    document.getElementById('url').textContent = 'Addon URL: ' + plainUrl;
+    if (isLocal) {
+      // stremio:// deep links are rewritten to https:// by the app, which fails
+      // on a plain-HTTP local server — so copy the http:// URL instead.
+      btn.textContent = 'Copy addon URL';
+      btn.onclick = () => {
+        navigator.clipboard.writeText(plainUrl)
+          .then(() => { btn.textContent = 'Copied — paste it into Stremio'; })
+          .catch(() => { window.prompt('Copy this URL and paste it into Stremio:', plainUrl); });
+      };
+    } else {
+      btn.textContent = 'Install in Stremio';
+      btn.onclick = () => { location.href = 'stremio://' + location.host + '/' + path + '/manifest.json'; };
+    }
   }
   document.getElementById('form').addEventListener('input', refresh);
   refresh();
@@ -390,7 +404,7 @@ function landingHtml() {
   <a class="btn" href="/configure">Configure &amp; Install</a>
   <p style="margin-top:20px;font-size:.85rem">Or paste this URL into Stremio's "Add addon" box:<br><code id="u"></code></p>
 </div>
-<script>document.getElementById('u').textContent = 'https://' + location.host + '/manifest.json';</script>
+<script>document.getElementById('u').textContent = location.protocol + '//' + location.host + '/manifest.json';</script>
 </body>
 </html>`;
 }

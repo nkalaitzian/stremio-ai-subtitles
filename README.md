@@ -122,6 +122,10 @@ Set `HOST=0.0.0.0` to listen on all interfaces (default). Then share/install
 
 ## Troubleshooting
 
+- **"Failed to get addon manifest from https://127.0.0.1..."** — the addon runs on plain HTTP, but
+  Stremio was given an `https://` URL. Paste exactly `http://127.0.0.1:7000/manifest.json` (keep the
+  `http://` prefix and the port) and make sure `npm start` is still running. Stremio only accepts
+  plain HTTP for `127.0.0.1`; anything public must be HTTPS.
 - **"No source subtitles found for this video"** — OpenSubtitles has no entry for this exact release;
   try another release/stream, or set a specific source language.
 - **OpenSubtitles 406 / "daily download limit"** — the free key has a daily download quota; cached
