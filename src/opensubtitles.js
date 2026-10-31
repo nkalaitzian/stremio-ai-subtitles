@@ -2,11 +2,13 @@
 
 // ---------------------------------------------------------------------------
 // Minimal OpenSubtitles.com REST API client.
-//   POST /api/v1/login     -> JWT (with the Api-Key header)
-//   GET  /api/v1/subtitles -> search by moviehash / imdb_id
-//   POST /api/v1/download  -> temporary download link
-// Downloaded source subtitle files are cached on disk to spare the daily
-// download quota.
+//   GET  /api/v1/subtitles -> search by moviehash / imdb_id (Api-Key only)
+//   POST /api/v1/login     -> JWT; body {username, password} + Api-Key header
+//   POST /api/v1/download  -> temporary download link (requires the JWT)
+// Search needs only the Api-Key. Download needs a user session, which is
+// obtained by logging in with the account username and password — the API key
+// alone cannot produce a token. Downloaded source files are cached on disk to
+// spare the daily download quota.
 // ---------------------------------------------------------------------------
 
 const fs = require('fs');
@@ -59,8 +61,10 @@ async function writeSourceCache(fileId, content) {
 }
 
 class OpenSubtitles {
-  constructor(apiKey, baseUrl) {
+  constructor(apiKey, username, password, baseUrl) {
     this.apiKey = apiKey;
+    this.username = username;
+    this.password = password;
     this.base = `${(baseUrl || 'https://api.opensubtitles.com').replace(/\/+$/, '')}/api/v1`;
     this.token = null;
   }
@@ -78,19 +82,22 @@ class OpenSubtitles {
 
   async ensureToken() {
     if (this.token) return this.token;
+    if (!this.username || !this.password) {
+      throw markAuthError('OpenSubtitles needs your username and password to download — reinstall the addon and set them');
+    }
     let res;
     try {
       res = await fetch(`${this.base}/login`, {
         method: 'POST',
         headers: this.baseHeaders(false),
-        body: JSON.stringify({}),
+        body: JSON.stringify({ username: this.username, password: this.password }),
         signal: AbortSignal.timeout(15000),
       });
     } catch (err) {
       throw new Error(`Could not reach OpenSubtitles: ${err.message}`);
     }
     if (res.status === 401 || res.status === 403) {
-      throw markAuthError('OpenSubtitles login failed (HTTP ' + res.status + ') — check your OpenSubtitles.com API key');
+      throw markAuthError('OpenSubtitles login failed (HTTP ' + res.status + ') — check your OpenSubtitles.com username and password');
     }
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -102,28 +109,18 @@ class OpenSubtitles {
     return this.token;
   }
 
-  // Search and return raw "attributes" objects.
+  // Search and return raw "attributes" objects. Only the Api-Key header is
+  // required — searching does not need a user login.
   async search(params, type) {
-    await this.ensureToken();
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null && v !== '') qs.set(k, v);
     }
     if (type) qs.set('type', type);
     const url = `${this.base}/subtitles?${qs.toString()}`;
-    const res = await fetch(url, { headers: this.baseHeaders(true), signal: AbortSignal.timeout(15000) });
-    if (res.status === 401) {
-      this.token = null; // token expired; retry once with a fresh one
-      await this.ensureToken();
-      const res2 = await fetch(url, { headers: this.baseHeaders(true), signal: AbortSignal.timeout(15000) });
-      if (res2.ok) {
-        const data2 = await res2.json().catch(() => null);
-        return (data2 && data2.data) || [];
-      }
-      if (res2.status === 401 || res2.status === 403) {
-        throw markAuthError('OpenSubtitles search failed (HTTP ' + res2.status + ') — check your OpenSubtitles.com API key');
-      }
-      throw new Error('OpenSubtitles search failed (HTTP ' + res2.status + ')');
+    const res = await fetch(url, { headers: this.baseHeaders(false), signal: AbortSignal.timeout(15000) });
+    if (res.status === 401 || res.status === 403) {
+      throw markAuthError('OpenSubtitles search failed (HTTP ' + res.status + ') — check your OpenSubtitles.com API key');
     }
     if (!res.ok) throw new Error(`OpenSubtitles search failed (HTTP ${res.status})`);
     const data = await res.json().catch(() => null);
@@ -211,16 +208,21 @@ class OpenSubtitles {
     return list.slice(0, limit);
   }
 
-  async downloadLink(fileId) {
-    await this.ensureToken();
-    const res = await fetch(`${this.base}/download`, {
+  async requestDownload(fileId) {
+    return fetch(`${this.base}/download`, {
       method: 'POST',
       headers: this.baseHeaders(true),
       body: JSON.stringify({ file_id: Number(fileId) }),
       signal: AbortSignal.timeout(15000),
     });
-    if (res.status === 406) {
-      throw new Error('OpenSubtitles daily download limit reached (406). Upgrade the API key or try again tomorrow.');
+  }
+
+  async parseDownload(res) {
+    if (res.status === 407) {
+      throw new Error('OpenSubtitles daily download limit reached (407). Upgrade your OpenSubtitles plan or try again tomorrow.');
+    }
+    if (res.status === 406 || res.status === 401 || res.status === 403) {
+      throw markAuthError('OpenSubtitles download failed (HTTP ' + res.status + ') — not logged in; check your OpenSubtitles.com username and password');
     }
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -229,6 +231,19 @@ class OpenSubtitles {
     const data = await res.json().catch(() => null);
     if (!data || !data.link) throw new Error('OpenSubtitles returned no download link');
     return data;
+  }
+
+  async downloadLink(fileId) {
+    await this.ensureToken();
+    const res = await this.requestDownload(fileId);
+    // 406 "No session" / 401 means the token is missing or expired: re-login
+    // once and retry before giving up.
+    if (res.status === 406 || res.status === 401 || res.status === 403) {
+      this.token = null;
+      await this.ensureToken();
+      return this.parseDownload(await this.requestDownload(fileId));
+    }
+    return this.parseDownload(res);
   }
 
   // Returns the source subtitle file content (cached on disk).

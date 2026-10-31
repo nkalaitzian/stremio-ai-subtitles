@@ -43,8 +43,17 @@ function createOSMock() {
 
   app.post('/api/v1/login', (req, res) => {
     stats.loginCalls++;
-    if (req.headers['api-key'] === 'bad-key') {
+    const apiKey = req.headers['api-key'];
+    const body = req.body || {};
+    if (apiKey === 'bad-key') {
       return res.status(401).json({ message: 'Unauthorized' });
+    }
+    // The real API requires username + password; an empty body is a 401.
+    if (!body.username || !body.password) {
+      return res.status(401).json({ message: 'Missing username or password' });
+    }
+    if (body.username !== 'osuser' || body.password !== 'ospass') {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
     res.json({ token: 'mock-token', status: 200 });
   });
@@ -62,6 +71,10 @@ function createOSMock() {
       languages: q.languages,
       type: q.type,
     });
+    // Like the real API, an invalid Api-Key is rejected on search too.
+    if (req.headers['api-key'] === 'bad-key') {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
     // The real API needs at least one real search parameter.
     if (!q.moviehash && !q.imdb_id && !q.parent_imdb_id) {
       return res.status(400).json({ message: 'Missing search parameters' });
@@ -116,7 +129,15 @@ function createOSMock() {
   app.post('/api/v1/download', (req, res) => {
     stats.downloadCalls++;
     const port = process.env.MOCK_OS_PORT || '8311';
+    // Download requires a logged-in session, like the real API.
+    const auth = req.headers.authorization || '';
+    if (!auth.includes('mock-token')) {
+      return res.status(406).json({ message: 'No session' });
+    }
     const fileId = req.body && req.body.file_id ? req.body.file_id : 0;
+    if (fileId === 999) {
+      return res.status(407).json({ message: 'Download limit reached' });
+    }
     res.json({
       link: `http://127.0.0.1:${port}/file.srt?fileId=${fileId}`,
       file_name: 'sample.srt',
