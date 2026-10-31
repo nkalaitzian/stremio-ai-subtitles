@@ -64,4 +64,6 @@ jobs:
           beamup config "$BEAMUP_HOST" "$GITHUB_REPOSITORY_OWNER"
           HASH=$(printf '%s\n' "${GITHUB_REPOSITORY_OWNER,,}" | sha256sum | cut -c1-12)
           git remote add beamup "dokku@${BEAMUP_HOST}:${HASH}/${BEAMUP_PROJECT}"
-          git push beamup HEAD:master --force
+          # A tag checkout is a detached HEAD, so the destination ref must be
+          # fully qualified or git refuses to guess what "master" means.
+          git push beamup HEAD:refs/heads/master --force
