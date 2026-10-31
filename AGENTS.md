@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 53/53 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 54/54 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -44,8 +44,10 @@ Smoke test while running: `curl.exe -s http://127.0.0.1:7000/manifest.json`, `/c
 ```
 src/
   server.js          Express app + routes (the protocol surface). Read this to understand endpoints.
-  config.js          Language list, provider registry, config schema, /configure HTML page,
-                     config parsing (path-segment JSON / base64 / query params), prompt rendering.
+  config.js          Language list, provider registry, config schema, /configure HTML page
+                     (remembers non-secret settings in localStorage; links the OpenSubtitles
+                     consumers page), config parsing (path-segment JSON / base64 / query params),
+                     prompt rendering.
   providers.js       AI adapters, one contract: translateChunk({providerId, lines, from, to, prompt,
                      model, baseUrl, apiKey}) -> Promise<string[]>. Kinds: openai-compatible,
                      anthropic, gemini, deepl, libretranslate, google.
@@ -189,7 +191,7 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   with the Api-Key header only). 407 is the download-quota limit. v1.1.2 had wrongly added
   `osUsername`/`osPassword` based on the `subliminal` client, which needs them only because it uses
   a shared app key.
-- All tests pass: **53/53** (`npm test`). Nothing is currently broken or in progress.
+- All tests pass: **54/54** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),

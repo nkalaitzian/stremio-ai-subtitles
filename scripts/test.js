@@ -106,6 +106,7 @@ async function main() {
   check('HTML configure page has textarea for prompt', confHtml.text.includes('<textarea'));
   check('HTML configure page links opensubtitles.com/consumers',
     confHtml.text.includes('<a href="https://www.opensubtitles.com/en/consumers" target="_blank"'));
+  check('HTML configure page remembers non-secret settings', confHtml.text.includes('localStorage'));
 
   // ---- 3. Configured manifest --------------------------------------------
   console.log('\n[3] configured manifest.json');

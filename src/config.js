@@ -349,9 +349,12 @@ function configureHtml() {
   </form>
   <div class="url" id="url"></div>
   <p class="hint">Paste the URL above into Stremio → Addons → "Add addon". Stremio accepts plain http:// only for 127.0.0.1 addresses — make sure the addon server is running.</p>
+  <p class="hint">Reconfiguring? Stremio requires you to <b>remove the old install first</b>, then paste the new URL. Your non-secret settings are remembered here, so you only re-enter the API keys.</p>
 </div>
 <script>
   const keys = ${JSON.stringify(schema.map((e) => e.key))};
+  const secretKeys = ${JSON.stringify(schema.filter((e) => e.type === 'password').map((e) => e.key))};
+  const STORAGE_KEY = 'aisubtitles.config.v1';
   function buildPath() {
     const config = {};
     for (const k of keys) {
@@ -380,7 +383,33 @@ function configureHtml() {
       btn.onclick = () => { location.href = 'stremio://' + location.host + '/' + path + '/manifest.json'; };
     }
   }
-  document.getElementById('form').addEventListener('input', refresh);
+  // Remember the non-secret fields between visits so reconfiguring doesn't mean
+  // retyping everything. API keys are never persisted.
+  function loadSaved() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (saved && typeof saved === 'object') {
+        for (const k of keys) {
+          if (secretKeys.includes(k)) continue;
+          const el = document.getElementById(k);
+          if (el && typeof saved[k] === 'string') el.value = saved[k];
+        }
+      }
+    } catch (e) {}
+  }
+  function save() {
+    try {
+      const cfg = {};
+      for (const k of keys) {
+        if (secretKeys.includes(k)) continue;
+        const el = document.getElementById(k);
+        cfg[k] = el ? el.value : '';
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+    } catch (e) {}
+  }
+  loadSaved();
+  document.getElementById('form').addEventListener('input', () => { save(); refresh(); });
   refresh();
 </script>
 </body>
