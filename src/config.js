@@ -1,5 +1,8 @@
 'use strict';
 
+// Single source of truth for the addon/manifest version.
+const { version: VERSION } = require('../package.json');
+
 // ---------------------------------------------------------------------------
 // Languages available for translation
 // ---------------------------------------------------------------------------
@@ -336,6 +339,7 @@ function configureHtml(initialConfig) {
   .box { max-width: 640px; margin: 0 auto; background: #26262f; border-radius: 12px; padding: 24px 28px; }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
   p.sub { color: #9a9ab0; margin: 0 0 20px; font-size: .9rem; }
+  .version { color: #9a9ab0; font-size: .82rem; margin: 0 0 12px; letter-spacing: .02em; }
   .field { margin-bottom: 16px; }
   label { display: block; font-size: .85rem; color: #c9c9dd; margin-bottom: 6px; }
   label a { color: #a98bd6; }
@@ -353,6 +357,7 @@ function configureHtml(initialConfig) {
 <body>
 <div class="box">
   <h1>AI Subtitle Translator</h1>
+  <p class="version">v${VERSION}</p>
   <p class="sub">${subText}</p>
   <form id="form" onsubmit="return false;">
     ${fields}
@@ -480,6 +485,7 @@ function landingHtml() {
 }
 
 module.exports = {
+  VERSION,
   LANGUAGES,
   PROVIDERS,
   PROVIDER_OPTIONS,

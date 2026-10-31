@@ -18,7 +18,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 - **Location:** `D:\Development\stremio-ai-subtitles` (moved here from `C:\Users\nikos\.deepseek` — do not look for it there)
 - **GitHub:** https://github.com/nkalaitzian/stremio-ai-subtitles (public, `main` branch, origin set)
 - **gh CLI:** authenticated as `nkalaitzian`. **git identity:** Nikos Kalaitzian <nikoskalai@gmail.com>
-- **Version:** 1.1.5 (manifest + package.json — keep in sync)
+- **Version:** 1.1.6 (manifest + package.json — keep in sync)
 - **Stack:** Node.js ≥18 (tested on Node 26), Express 4, **zero other runtime deps** (uses global `fetch`, `crypto`, `fs`). CommonJS.
 - **Environment:** Windows (PowerShell), user locale Europe/Athens (Greek default target language is intentional).
 
@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 63/63 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 64/64 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -217,12 +217,15 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   Stremio's `InstallAddon` replaces only on identical transport URL, never by manifest id. (A true
   in-place edit would require server-side config keyed by a stable ID; deliberately not done to
   keep the server stateless.)
+- v1.1.6 shows the addon version (`v1.1.6`) under the title on the `/configure` page. The version
+  is read from `package.json` via `config.VERSION`, so the manifest, the config page and the npm
+  package can never drift apart.
 - Added `.github/workflows/deploy.yml`: runs the E2E tests, then force-pushes the tagged commit to
   BeamUp (`dokku@a.baby-beamup.club:<hash>/stremio-ai-subtitles`) on **tag pushes** (any tag) and
   manual `workflow_dispatch` — normal pushes to main do not deploy. BeamUp auth is a dedicated SSH
   key whose public half is on the GitHub account; the private half lives in the `BEAMUP_SSH_KEY`
   repo secret.
-- All tests pass: **63/63** (`npm test`). Nothing is currently broken or in progress.
+- All tests pass: **64/64** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),
@@ -242,7 +245,8 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
 ## 7. If you change behavior
 
 1. Update/add checks in `scripts/test.js` (mock upstreams make this cheap) and run `npm test`.
-2. Bump `version` in **both** `src/server.js` (manifest) and `package.json`.
+2. Bump `version` in `package.json` — `manifest.version` and the `/configure` page read
+   `config.VERSION` from it.
 3. Update README.md (user-facing) and this file (architecture/protocol facts).
 4. Commit to `main` and push (`gh` is authenticated; repo exists — do not recreate it).
 

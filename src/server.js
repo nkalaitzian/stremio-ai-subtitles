@@ -39,7 +39,7 @@ function getOSClient(apiKey) {
 function buildManifest(configured) {
   const manifest = {
     id: 'com.stremio.aisubtitletranslator',
-    version: '1.1.5',
+    version: config.VERSION,
     name: 'AI Subtitle Translator',
     description: 'Translates subtitles to a language you pick, using AI providers (OpenAI, Anthropic, DeepSeek, Grok, Gemini, DeepL and more).',
     resources: ['subtitles'],
