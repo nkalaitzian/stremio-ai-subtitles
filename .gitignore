@@ -1,0 +1,5 @@
+node_modules/
+.cache/
+.cache-test/
+.env
+npm-debug.log*
