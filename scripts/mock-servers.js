@@ -151,9 +151,14 @@ function createLLMMock() {
   const app = express();
   app.use(express.json());
   let translateCalls = 0;
+  let lastModel = null;
 
   app.post('/v1/chat/completions', (req, res) => {
     translateCalls++;
+    lastModel = req.body && req.body.model ? req.body.model : null;
+    if (lastModel === 'fail-model') {
+      return res.status(400).json({ error: 'model not found' });
+    }
     let count = FIXTURE_TRANSLATIONS.length;
     try {
       const user = (req.body.messages || []).find((m) => m.role === 'user');
@@ -166,7 +171,7 @@ function createLLMMock() {
     });
   });
 
-  app.get('/stats', (req, res) => res.json({ translateCalls }));
+  app.get('/stats', (req, res) => res.json({ translateCalls, lastModel }));
   return app;
 }
 

@@ -78,7 +78,7 @@ async function main() {
   check('resources include subtitles', manifest.json && manifest.json.resources.includes('subtitles'));
   check('types include movie and series', manifest.json && manifest.json.types.includes('movie') && manifest.json.types.includes('series'));
   check('configurationRequired is true', manifest.json && manifest.json.behaviorHints.configurationRequired === true);
-  check('manifest version is 1.1.3', manifest.json && manifest.json.version === '1.1.3');
+  check('manifest version is 1.1.4', manifest.json && manifest.json.version === '1.1.4');
   check('config schema has provider/apiKey/targetLang/prompt/osApiKey',
     manifest.json && ['provider', 'apiKey', 'targetLang', 'prompt', 'osApiKey'].every((k) => manifest.json.config.some((c) => c.key === k)));
   check('CORS header present', manifest.headers.get('access-control-allow-origin') === '*');
@@ -258,6 +258,39 @@ async function main() {
   check('only French variants and no auto track',
     frSubs.length === 1 && frSubs[0].label === 'AI from French' && !frSubs.some((t) => t.label === 'AI translate (best match)'),
     `labels: ${frSubs.map((t) => t.label).join(' | ')}`);
+
+  // ---- 11. Provider defaults resolve (deepseek + empty model) --------------
+  console.log('\n[11] provider defaults resolve for a non-custom provider');
+  const deepseekOption = optValue('provider').options.find((o) => o.startsWith('deepseek'));
+  const cfgDs = { ...cfg, provider: deepseekOption, model: '' };
+  const dsPath = encodeURIComponent(JSON.stringify(cfgDs));
+  const dsRes = await get(`${base}/${dsPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
+  const dsSubs = dsRes.json && dsRes.json.subtitles ? dsRes.json.subtitles : [];
+  const dsTrack = dsSubs.find((t) => t.label === 'AI from English — sample');
+  check('deepseek list returns variants', !!dsTrack, `got ${dsSubs.length}`);
+  if (dsTrack) {
+    const dsVtt = await get(dsTrack.url);
+    check('deepseek translates with its default model', dsVtt.text.includes('Γεια σου κόσμε'));
+    check('no "provider undefined / no base URL" warning', !dsVtt.text.includes('No base URL') && !dsVtt.text.includes('undefined'));
+    const llmStats = await get(`http://127.0.0.1:${MOCK_LLM_PORT}/stats`);
+    check('deepseek default model deepseek-chat was sent', llmStats.json.lastModel === 'deepseek-chat',
+      `got ${llmStats.json.lastModel}`);
+  }
+
+  // ---- 11b. Failed translation warns at the start --------------------------
+  console.log('\n[11b] failed translation surfaces an early warning cue');
+  const cfgFail = { ...cfg, provider: deepseekOption, model: 'fail-model' };
+  const failPath = encodeURIComponent(JSON.stringify(cfgFail));
+  const failRes = await get(`${base}/${failPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
+  const failSubs = failRes.json && failRes.json.subtitles ? failRes.json.subtitles : [];
+  const failTrack = failSubs.find((t) => t.label === 'AI from English — sample');
+  if (failTrack) {
+    const failVtt = await get(failTrack.url);
+    check('failed translation keeps the original lines', failVtt.text.includes('Hello world'));
+    check('warning cue is at the start', failVtt.text.includes('00:00:01.000 --> 00:00:06.000') && failVtt.text.includes('⚠'));
+  } else {
+    check('failed translation track present', false, `got ${failSubs.length}`);
+  }
 
   stopServers();
   console.log(`\n${checks - failures}/${checks} checks passed`);

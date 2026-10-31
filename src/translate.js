@@ -139,11 +139,14 @@ async function translateCues(cues, opts) {
   const failed = chunkResults.filter((c) => c && c.__error).map((c) => c.__error);
   const outCues = cues.map((c, i) => ({ ...c, text: results[i] || c.text }));
   if (failed.length) {
+    // Surface the failure at the very start so it is seen immediately, not at
+    // the end of the video where the user may never notice it.
     outCues.push({
-      start: outCues.length ? outCues[outCues.length - 1].end : '00:00:01.000',
-      end: outCues.length ? outCues[outCues.length - 1].end : '00:00:05.000',
+      start: '00:00:01.000',
+      end: '00:00:06.000',
       text: `⚠ ${failed[0]}`,
     });
+    outCues.sort((a, b) => String(a.start).localeCompare(String(b.start)));
   }
   return outCues;
 }

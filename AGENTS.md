@@ -18,7 +18,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 - **Location:** `D:\Development\stremio-ai-subtitles` (moved here from `C:\Users\nikos\.deepseek` — do not look for it there)
 - **GitHub:** https://github.com/nkalaitzian/stremio-ai-subtitles (public, `main` branch, origin set)
 - **gh CLI:** authenticated as `nkalaitzian`. **git identity:** Nikos Kalaitzian <nikoskalai@gmail.com>
-- **Version:** 1.1.3 (manifest + package.json — keep in sync)
+- **Version:** 1.1.4 (manifest + package.json — keep in sync)
 - **Stack:** Node.js ≥18 (tested on Node 26), Express 4, **zero other runtime deps** (uses global `fetch`, `crypto`, `fs`). CommonJS.
 - **Environment:** Windows (PowerShell), user locale Europe/Athens (Greek default target language is intentional).
 
@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 54/54 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 60/60 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -48,9 +48,9 @@ src/
                      (remembers non-secret settings in localStorage; links the OpenSubtitles
                      consumers page), config parsing (path-segment JSON / base64 / query params),
                      prompt rendering.
-  providers.js       AI adapters, one contract: translateChunk({providerId, lines, from, to, prompt,
-                     model, baseUrl, apiKey}) -> Promise<string[]>. Kinds: openai-compatible,
-                     anthropic, gemini, deepl, libretranslate, google.
+  providers.js       AI adapters, one contract: translateChunk({provider, lines, from, to, prompt,
+                     model, baseUrl, apiKey}) -> Promise<string[]>. `provider` is the registry id
+                     (accepts `providerId` too); it resolves the provider's default model/baseUrl.
   opensubtitles.js   OpenSubtitles.com v1 client: search by moviehash/moviebytesize + imdb_id
                      (numeric) or, for episodes, parent_imdb_id + season_number/episode_number.
                      Both search and download authenticate with the Api-Key header alone (the
@@ -71,7 +71,8 @@ scripts/
                      OpenSubtitles request format + IMDb fallback, series episode lookup,
                      translated VTT from a chosen source, cache hits, auto-track behavior,
                      French re-translation, error tracks (missing/invalid API key), empty list,
-                     defaults, source-language filtering.
+                     defaults, source-language filtering, provider defaults (deepseek with an
+                     empty model), and the early ⚠ cue for failed chunks.
 .env.example         PORT/HOST/OPENSUBTITLES_BASE/CACHE_DIR (no secrets — keys are per-install config).
 ```
 
@@ -191,7 +192,13 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   with the Api-Key header only). 407 is the download-quota limit. v1.1.2 had wrongly added
   `osUsername`/`osPassword` based on the `subliminal` client, which needs them only because it uses
   a shared app key.
-- All tests pass: **54/54** (`npm test`). Nothing is currently broken or in progress.
+- v1.1.4 fixed a critical provider mismatch: `server.js`/`translate.js` pass `provider`, but
+  `providers.translateChunk` read only `providerId`, so it fell back to the `custom` provider and
+  every non-custom provider failed with "No base URL configured for provider undefined" (the tests
+  missed it because they used `custom` with an explicit base URL). `translateChunk` now accepts
+  both names. Translation failures now show the ⚠ cue at the **start** of the video instead of the
+  end.
+- All tests pass: **60/60** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),

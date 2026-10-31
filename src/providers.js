@@ -256,16 +256,26 @@ async function translateGoogle({ lines, from, to, prompt, model, baseUrl, apiKey
 // ---------------------------------------------------------------------------
 
 async function translateChunk(opts) {
-  const { providerId, lines, from, to, prompt, model, baseUrl, apiKey } = opts;
+  const { lines, from, to, prompt, model, baseUrl, apiKey } = opts;
+  // Callers (translate.js / server.js) pass the provider as `provider`; keep
+  // accepting `providerId` too so the contract is unambiguous.
+  const providerId = opts.providerId || opts.provider;
   const provider = PROVIDERS[providerId] || PROVIDERS.custom;
   const kind = provider.kind;
   const resolvedModel = model || provider.defaultModel;
-  const resolvedBaseUrl = (baseUrl || provider.defaultBaseUrl).replace(/\/+$/, '');
-  if (!resolvedBaseUrl) throw new Error(`No base URL configured for provider "${providerId}"`);
+  const resolvedBaseUrl = baseUrl || provider.defaultBaseUrl;
+  if (!resolvedBaseUrl) {
+    throw new Error(`No base URL configured for provider "${providerId || '(none)'}"`);
+  }
   if (provider.needsKey && !apiKey && kind !== 'google') {
     throw new Error(`Provider "${providerId}" requires an API key`);
   }
-  const args = { lines, from, to, prompt, model: resolvedModel, baseUrl: resolvedBaseUrl, apiKey };
+  const args = {
+    lines, from, to, prompt,
+    model: resolvedModel,
+    baseUrl: resolvedBaseUrl.replace(/\/+$/, ''),
+    apiKey,
+  };
   switch (kind) {
     case 'openai-compatible': return translateOpenAICompatible(args);
     case 'anthropic': return translateAnthropic(args);
