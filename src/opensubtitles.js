@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 // Minimal OpenSubtitles.com REST API client.
 //   POST /api/v1/login     -> JWT (with the Api-Key header)
-//   GET  /api/v1/subtitles -> search by video_hash / imdb_id
+//   GET  /api/v1/subtitles -> search by moviehash / imdb_id
 //   POST /api/v1/download  -> temporary download link
 // Downloaded source subtitle files are cached on disk to spare the daily
 // download quota.
@@ -14,6 +14,23 @@ const path = require('path');
 
 const USER_AGENT = 'StremioAISubtitles/1.0';
 const SRC_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// OpenSubtitles expects IMDb ids as integers (tt0111161 -> 111161) and the
+// file hash as "moviehash". Passing the Stremio-style "tt..." string or
+// "video_hash" silently yields zero search results.
+function numericImdb(id) {
+  if (id === null || id === undefined) return null;
+  const m = /(\d+)/.exec(String(id));
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function markAuthError(message) {
+  const err = new Error(message);
+  err.auth = true;
+  return err;
+}
 
 let sourceCacheDir = null;
 function setSourceCacheDir(dir) { sourceCacheDir = dir; }
@@ -73,7 +90,7 @@ class OpenSubtitles {
       throw new Error(`Could not reach OpenSubtitles: ${err.message}`);
     }
     if (res.status === 401 || res.status === 403) {
-      throw new Error('OpenSubtitles login failed (HTTP ' + res.status + ') — check your OpenSubtitles.com API key');
+      throw markAuthError('OpenSubtitles login failed (HTTP ' + res.status + ') — check your OpenSubtitles.com API key');
     }
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -103,6 +120,9 @@ class OpenSubtitles {
         const data2 = await res2.json().catch(() => null);
         return (data2 && data2.data) || [];
       }
+      if (res2.status === 401 || res2.status === 403) {
+        throw markAuthError('OpenSubtitles search failed (HTTP ' + res2.status + ') — check your OpenSubtitles.com API key');
+      }
       throw new Error('OpenSubtitles search failed (HTTP ' + res2.status + ')');
     }
     if (!res.ok) throw new Error(`OpenSubtitles search failed (HTTP ${res.status})`);
@@ -110,24 +130,51 @@ class OpenSubtitles {
     return (data && data.data) || [];
   }
 
-  // Try hash first (most accurate), then IMDB id, with and without a language
+  // Try hash first (most accurate), then IMDb id, with and without a language
   // filter. Score results: prefer non-hearing-impaired, non-machine-translated
   // subtitles with many downloads.
-  async searchBest({ videoHash, imdbId, type, languages, limit = 15 }) {
-    const attempts = [];
-    if (languages && languages.length) {
-      attempts.push({ video_hash: videoHash, languages: languages.join(',') });
-      if (imdbId) attempts.push({ imdb_id: imdbId, languages: languages.join(',') });
+  //
+  // API parameter names matter: `moviehash` / `moviebytesize` (not
+  // `video_hash`), and `imdb_id` / `parent_imdb_id` must be numeric. Series
+  // episodes are looked up by the show's IMDb id plus season/episode numbers.
+  async searchBest({ videoHash, videoSize, imdbId, type, season, episode, languages, limit = 15 }) {
+    const imdb = numericImdb(imdbId);
+
+    const hashParams = {};
+    if (videoHash) hashParams.moviehash = String(videoHash);
+    if (videoSize !== undefined && videoSize !== null && videoSize !== '') {
+      hashParams.moviebytesize = String(videoSize);
     }
-    attempts.push({ video_hash: videoHash });
-    if (imdbId) attempts.push({ imdb_id: imdbId });
+
+    const idParams = {};
+    if (imdb) {
+      if (type === 'episode') {
+        idParams.parent_imdb_id = imdb;
+        if (Number.isInteger(season)) idParams.season_number = season;
+        if (Number.isInteger(episode)) idParams.episode_number = episode;
+      } else {
+        idParams.imdb_id = imdb;
+      }
+    }
+
+    const langFilter = languages && languages.length ? languages.join(',') : null;
+    const attempts = [];
+    if (langFilter) {
+      if (hashParams.moviehash) attempts.push({ ...hashParams, languages: langFilter });
+      if (Object.keys(idParams).length) attempts.push({ ...idParams, languages: langFilter });
+    }
+    if (hashParams.moviehash) attempts.push(hashParams);
+    if (Object.keys(idParams).length) attempts.push(idParams);
+    if (!attempts.length) return [];
 
     const byFile = new Map();
+    const errors = [];
     for (const params of attempts) {
       let data = [];
       try {
         data = await this.search(params, type);
       } catch (err) {
+        errors.push(err);
         continue; // try the next strategy
       }
       for (const item of data) {
@@ -151,6 +198,15 @@ class OpenSubtitles {
       }
       if (byFile.size >= limit) break;
     }
+
+    // If every lookup failed (bad API key, network, malformed request), report
+    // the real error instead of pretending there were no subtitles.
+    if (!byFile.size) {
+      const authErr = errors.find((e) => e.auth);
+      if (authErr) throw authErr;
+      if (errors.length === attempts.length) throw errors[0];
+    }
+
     const list = [...byFile.values()].sort((a, b) => b.score - a.score);
     return list.slice(0, limit);
   }

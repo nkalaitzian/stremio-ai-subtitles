@@ -18,7 +18,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 - **Location:** `D:\Development\stremio-ai-subtitles` (moved here from `C:\Users\nikos\.deepseek` — do not look for it there)
 - **GitHub:** https://github.com/nkalaitzian/stremio-ai-subtitles (public, `main` branch, origin set)
 - **gh CLI:** authenticated as `nkalaitzian`. **git identity:** Nikos Kalaitzian <nikoskalai@gmail.com>
-- **Version:** 1.1.0 (manifest + package.json — keep in sync)
+- **Version:** 1.1.1 (manifest + package.json — keep in sync)
 - **Stack:** Node.js ≥18 (tested on Node 26), Express 4, **zero other runtime deps** (uses global `fetch`, `crypto`, `fs`). CommonJS.
 - **Environment:** Windows (PowerShell), user locale Europe/Athens (Greek default target language is intentional).
 
@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 40/40 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 51/51 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -50,7 +50,9 @@ src/
                      model, baseUrl, apiKey}) -> Promise<string[]>. Kinds: openai-compatible,
                      anthropic, gemini, deepl, libretranslate, google.
   opensubtitles.js   OpenSubtitles.com v1 client: login (Api-Key header + empty body -> JWT),
-                     search by video_hash / imdb_id, download link, on-disk source cache (30-day TTL).
+                     search by moviehash/moviebytesize + imdb_id (numeric) or, for episodes,
+                     parent_imdb_id + season_number/episode_number; download link; on-disk
+                     source cache (30-day TTL).
   subtitleFormat.js  SRT/WebVTT parsing -> cue objects; toVtt(); sanitize() strips tags/ASS overrides;
                      errorVtt() renders in-player error cues.
   translate.js       Chunked translation (≤40 lines or ≤6000 chars per chunk, concurrency 3),
@@ -61,10 +63,12 @@ scripts/
   mock-servers.js    Mock OpenSubtitles (port 8311) + mock LLM (8312). OS mock serves 3 candidates:
                      en#42 (500 dls), en#44 (HI, 100 dls), fr#43 (300 dls); French file returns
                      different SRT content. LLM mock echoes N Greek lines matching input count.
-  test.js            E2E suite: addon on 8320, .cache-test dir. Sections: manifest, /configure
-                     (JSON+HTML), configured manifest, variant track list, translated VTT from a
-                     chosen source, cache hits, auto-track behavior, French re-translation, error
-                     tracks, empty list, defaults, explicit-source-language filtering.
+  test.js            E2E suite: addon on 8320, .cache-test dir (wiped on every run). Sections:
+                     manifest, /configure (JSON+HTML), configured manifest, variant track list,
+                     OpenSubtitles request format + IMDb fallback, series episode lookup,
+                     translated VTT from a chosen source, cache hits, auto-track behavior,
+                     French re-translation, error tracks (missing and invalid OS key), empty
+                     list, defaults, explicit-source-language filtering.
 .env.example         PORT/HOST/OPENSUBTITLES_BASE/CACHE_DIR (no secrets — keys are per-install config).
 ```
 
@@ -106,6 +110,11 @@ References: stremio-addon-sdk `getRouter.js`/`landingTemplate.js`, stremio-core 
 3. The player's subtitle menu has **two panes: languages → variants**. All tracks of one language
    appear as variants; there are no custom buttons — the only interaction is track selection
    (which fetches that track's VTT URL).
+4. **OpenSubtitles search parameter names are exact and unforgiving**: `moviehash` +
+   `moviebytesize` (NOT `video_hash`), and `imdb_id` / `parent_imdb_id` must be **integers**
+   (strip the `tt` prefix). Unknown parameter names are ignored, so a wrong name silently produces
+   zero results — not an error. Episodes need `type=episode` + `parent_imdb_id` (show) +
+   `season_number` + `episode_number`; Stremio sends the video id as `tt1234567:season:episode`.
 
 ### Source-picker design (v1.1.0, the key UX)
 The subtitle list returns one labeled track **per source subtitle** (≤2 per language, ≤6 languages,
@@ -120,14 +129,22 @@ The subtitle list returns one labeled track **per source subtitle** (≤2 per la
 ### OpenSubtitles API facts
 - Base `https://api.opensubtitles.com/api/v1` (overridable via `OPENSUBTITLES_BASE` for tests).
 - Login: `POST /login`, headers `Api-Key`, body `{}` → `{token}`; use `Authorization: Bearer`.
-- Search: `GET /subtitles?video_hash=...&imdb_id=...&languages=...&type=movie|episode`.
-  Stremio's series id is the **episode video id** (e.g. `tt1234567`), so `imdb_id` fallback works
-  for episodes too (`type=episode`).
+- Search: `GET /subtitles?moviehash=...&moviebytesize=...&languages=...&type=movie|episode`.
+  - `moviehash` is the OpenSubtitles hash Stremio sends as the `videoHash` extra; `moviebytesize`
+    is the `videoSize` extra.
+  - `imdb_id` is an **integer** — strip the `tt` prefix (`tt0111161` → `111161`).
+  - Series: Stremio sends `tt1234567:season:episode`; query with `type=episode` +
+    `parent_imdb_id` (the show, numeric) + `season_number` + `episode_number`. Using `imdb_id`
+    alone for an episode returns nothing.
+  - There is no `video_hash` parameter: unknown names are ignored and yield zero results silently.
 - Download: `POST /download {file_id}` → `{link, remaining,...}`; then GET the link. **HTTP 406 =
   daily quota exhausted** (surfaced as a friendly error cue).
 - `searchBest` scoring: prefer non-hearing-impaired (+2), non-machine-translated (+1),
   + download_count/1000; dedupe by file_id; limit 15. Language code normalization maps
   `pb`→`pt-BR`, `zh-tw`→`zh-TW`, etc.
+- If every search attempt fails (bad key, network, malformed request), `searchBest` throws the
+  underlying error instead of returning `[]`, so the player says "login failed" rather than
+  "no subtitles".
 
 ### Error handling philosophy
 Never return HTTP 500 to the player for subtitle-list problems. Return a **track whose VTT is an
@@ -159,13 +176,22 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
 - Initial commit `f3ced30` (15 files); `b79236a` fixed the https-vs-http local install bug
   (pages were generating `https://` URLs — now protocol-aware, localhost shows copy button);
   `5e1dae1` added the per-source variant picker (v1.1.0).
-- All tests pass: **40/40** (`npm test`). Nothing is currently broken or in progress.
-- `.cache/` and `.cache-test/` are gitignored; caches are safe to delete.
+- v1.1.1 fixed the OpenSubtitles search contract (`moviehash`/`moviebytesize` instead of
+  `video_hash`; numeric `imdb_id`; series via `parent_imdb_id` + season/episode) and made search
+  failures report the real error. The old parameters silently returned zero results, which is why
+  valid keys still produced "no source subtitles found".
+- All tests pass: **51/51** (`npm test`). Nothing is currently broken or in progress.
+- `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
+  `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),
   privacy (API keys ride in the addon URL — same as every configured Stremio addon), troubleshooting.
 - License: MIT (Nikos Kalaitzian, 2026).
 
 ### Open ideas (not requested yet — offer, don't start)
+- Serve existing subtitles in the **target** language from OpenSubtitles as their own tracks (and/or
+  skip AI translation when a human subtitle already exists). Discussed with the user; design not
+  agreed.
+- Filename (`query=`) search fallback for local files without an IMDb id.
 - GitHub Actions CI running `npm test`; Dockerfile; addon logo/background images; config-screen
   screenshot in README; per-provider formality options; caching translated VTTs keyed by video
   hash; support for the user supplying their own subtitle URL as source.

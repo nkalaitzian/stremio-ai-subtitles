@@ -9,14 +9,18 @@
 // ---------------------------------------------------------------------------
 
 const path = require('path');
+const fs = require('fs');
 
 const MOCK_OS_PORT = 8311;
 const MOCK_LLM_PORT = 8312;
 const ADDON_PORT = 8320;
 
+const CACHE_DIR = path.join(__dirname, '..', '.cache-test');
+fs.rmSync(CACHE_DIR, { recursive: true, force: true });
+
 process.env.OPENSUBTITLES_BASE = `http://127.0.0.1:${MOCK_OS_PORT}`;
 process.env.MOCK_OS_PORT = String(MOCK_OS_PORT);
-process.env.CACHE_DIR = path.join(__dirname, '..', '.cache-test');
+process.env.CACHE_DIR = CACHE_DIR;
 
 const { createOSMock, createLLMMock } = require('./mock-servers');
 
@@ -74,7 +78,7 @@ async function main() {
   check('resources include subtitles', manifest.json && manifest.json.resources.includes('subtitles'));
   check('types include movie and series', manifest.json && manifest.json.types.includes('movie') && manifest.json.types.includes('series'));
   check('configurationRequired is true', manifest.json && manifest.json.behaviorHints.configurationRequired === true);
-  check('manifest version is 1.1.0', manifest.json && manifest.json.version === '1.1.0');
+  check('manifest version is 1.1.1', manifest.json && manifest.json.version === '1.1.1');
   check('config schema has provider/apiKey/targetLang/prompt/osApiKey',
     manifest.json && ['provider', 'apiKey', 'targetLang', 'prompt', 'osApiKey'].every((k) => manifest.json.config.some((c) => c.key === k)));
   check('CORS header present', manifest.headers.get('access-control-allow-origin') === '*');
@@ -132,6 +136,37 @@ async function main() {
     frTrack && frTrack.url.includes('fileId=43') && frTrack.url.includes('provider=custom') && frTrack.url.includes('model=mock-model'));
   check('list is cacheable', subsRes.headers.get('cache-control') && subsRes.headers.get('cache-control').includes('max-age'));
 
+  // ---- 4b. OpenSubtitles request format + IMDb fallback --------------------
+  console.log('\n[4b] OpenSubtitles search parameters');
+  const osStats = await get(`http://127.0.0.1:${MOCK_OS_PORT}/stats`);
+  check('search uses moviehash + moviebytesize',
+    osStats.json.searches.some((p) => p.moviehash === 'deadbeef' && p.moviebytesize === '1234'));
+  check('search uses a numeric imdb_id (no "tt" prefix)',
+    osStats.json.searches.some((p) => p.imdb_id === '1'));
+  check('no legacy video_hash parameter',
+    !osStats.json.searches.some((p) => 'video_hash' in p));
+
+  const fallbackRes = await get(`${base}/${configPath}/subtitles/movie/tt0000001/videoHash=feedface&videoSize=1234.json`);
+  const fallbackSubs = fallbackRes.json && fallbackRes.json.subtitles ? fallbackRes.json.subtitles : [];
+  check('unknown hash falls back to the IMDb id', fallbackSubs.length === 4, `got ${fallbackSubs.length}`);
+
+  // ---- 4c. Series episodes use the show id + season/episode ----------------
+  console.log('\n[4c] series episode lookup');
+  const seriesRes = await get(`${base}/${configPath}/subtitles/series/tt0000002:3:4/videoHash=feedface&videoSize=1234.json`);
+  const seriesSubs = seriesRes.json && seriesRes.json.subtitles ? seriesRes.json.subtitles : [];
+  check('series episode returns variants', seriesSubs.length === 4, `got ${seriesSubs.length}`);
+  const seriesStats = await get(`http://127.0.0.1:${MOCK_OS_PORT}/stats`);
+  check('series search sends parent_imdb_id + season + episode',
+    seriesStats.json.searches.some((p) =>
+      p.parent_imdb_id === '2' && p.season_number === '3' && p.episode_number === '4'));
+  const seriesAuto = seriesSubs.find((t) => t.label === 'AI translate (best match)');
+  check('series auto track keeps the full episode id',
+    !!seriesAuto && decodeURIComponent(seriesAuto.url).includes('id=series:tt0000002:3:4'));
+  if (seriesAuto) {
+    const seriesVtt = await get(seriesAuto.url);
+    check('series auto track resolves and translates', seriesVtt.text.includes('Γεια σου κόσμε'));
+  }
+
   // ---- 5. Translated VTT from an explicit source ---------------------------
   console.log('\n[5] translated VTT from a chosen source (English variant)');
   if (enTrack && enTrack.url) {
@@ -183,6 +218,20 @@ async function main() {
     const errVtt = await get(errTrack.url);
     check('error VTT explains the problem', errVtt.text.includes('OpenSubtitles'));
     check('error VTT is not cached', errVtt.headers.get('cache-control') === 'no-store');
+  }
+
+  // ---- 7b. Invalid OpenSubtitles key -> real error, not "no subs" ----------
+  console.log('\n[7b] invalid OpenSubtitles key is reported honestly');
+  const cfgBadKey = { ...cfg, osApiKey: 'bad-key' };
+  const badKeyPath = encodeURIComponent(JSON.stringify(cfgBadKey));
+  const badRes = await get(`${base}/${badKeyPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
+  const badTrack = badRes.json && badRes.json.subtitles && badRes.json.subtitles[0];
+  check('search error track returned', badTrack && badTrack.id === 'ai-error-search-failed',
+    badTrack && badTrack.id);
+  if (badTrack) {
+    const badVtt = await get(badTrack.url);
+    check('error explains the OpenSubtitles login failure', badVtt.text.includes('login failed'));
+    check('error is not disguised as "no subtitles"', !badVtt.text.includes('no source subtitles'));
   }
 
   // ---- 8. Missing videoHash -> empty list ---------------------------------

@@ -39,59 +39,78 @@ const FIXTURE_TRANSLATIONS = ['Γεια σου κόσμε', 'Τι κάνεις;'
 function createOSMock() {
   const app = express();
   app.use(express.json());
-  const stats = { loginCalls: 0, searchCalls: 0, downloadCalls: 0, fileFetches: 0 };
+  const stats = { loginCalls: 0, searchCalls: 0, downloadCalls: 0, fileFetches: 0, searches: [] };
 
   app.post('/api/v1/login', (req, res) => {
     stats.loginCalls++;
+    if (req.headers['api-key'] === 'bad-key') {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
     res.json({ token: 'mock-token', status: 200 });
   });
 
   app.get('/api/v1/subtitles', (req, res) => {
     stats.searchCalls++;
-    if (req.query.video_hash === 'deadbeef' || req.query.imdb_id === 'tt0000001') {
-      return res.json({
-        total_count: 3,
-        data: [
-          {
-            id: '1',
-            type: 'subtitle',
-            attributes: {
-              subtitle_id: '1',
-              language: 'en',
-              download_count: 500,
-              hearing_impaired: false,
-              machine_translated: false,
-              files: [{ file_id: 42, file_name: 'sample.srt' }],
-            },
-          },
-          {
-            id: '2',
-            type: 'subtitle',
-            attributes: {
-              subtitle_id: '2',
-              language: 'en',
-              download_count: 100,
-              hearing_impaired: true,
-              machine_translated: false,
-              files: [{ file_id: 44, file_name: 'sample2.srt' }],
-            },
-          },
-          {
-            id: '3',
-            type: 'subtitle',
-            attributes: {
-              subtitle_id: '3',
-              language: 'fr',
-              download_count: 300,
-              hearing_impaired: false,
-              machine_translated: false,
-              files: [{ file_id: 43, file_name: 'sample.fr.srt' }],
-            },
-          },
-        ],
-      });
+    const q = req.query;
+    stats.searches.push({
+      moviehash: q.moviehash,
+      moviebytesize: q.moviebytesize,
+      imdb_id: q.imdb_id,
+      parent_imdb_id: q.parent_imdb_id,
+      season_number: q.season_number,
+      episode_number: q.episode_number,
+      languages: q.languages,
+      type: q.type,
+    });
+    // The real API needs at least one real search parameter.
+    if (!q.moviehash && !q.imdb_id && !q.parent_imdb_id) {
+      return res.status(400).json({ message: 'Missing search parameters' });
     }
-    res.json({ total_count: 0, data: [] });
+    const matched = q.moviehash === 'deadbeef'
+      || q.imdb_id === '1'
+      || (q.parent_imdb_id === '2' && q.season_number === '3' && q.episode_number === '4');
+    if (!matched) return res.json({ total_count: 0, data: [] });
+    return res.json({
+      total_count: 3,
+      data: [
+        {
+          id: '1',
+          type: 'subtitle',
+          attributes: {
+            subtitle_id: '1',
+            language: 'en',
+            download_count: 500,
+            hearing_impaired: false,
+            machine_translated: false,
+            files: [{ file_id: 42, file_name: 'sample.srt' }],
+          },
+        },
+        {
+          id: '2',
+          type: 'subtitle',
+          attributes: {
+            subtitle_id: '2',
+            language: 'en',
+            download_count: 100,
+            hearing_impaired: true,
+            machine_translated: false,
+            files: [{ file_id: 44, file_name: 'sample2.srt' }],
+          },
+        },
+        {
+          id: '3',
+          type: 'subtitle',
+          attributes: {
+            subtitle_id: '3',
+            language: 'fr',
+            download_count: 300,
+            hearing_impaired: false,
+            machine_translated: false,
+            files: [{ file_id: 43, file_name: 'sample.fr.srt' }],
+          },
+        },
+      ],
+    });
   });
 
   app.post('/api/v1/download', (req, res) => {

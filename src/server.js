@@ -39,7 +39,7 @@ function getOSClient(apiKey) {
 function buildManifest(configured) {
   const manifest = {
     id: 'com.stremio.aisubtitletranslator',
-    version: '1.1.0',
+    version: '1.1.1',
     name: 'AI Subtitle Translator',
     description: 'Translates subtitles to a language you pick, using AI providers (OpenAI, Anthropic, DeepSeek, Grok, Gemini, DeepL and more).',
     resources: ['subtitles'],
@@ -115,15 +115,31 @@ function baseUrl(req) {
   return `${proto}://${req.get('host')}`;
 }
 
-function extractImdbId(id) {
-  const m = /(tt\d{5,})/.exec(String(id || ''));
-  return m ? m[1] : null;
+// Stremio sends series episodes as "tt1234567:season:episode". The
+// OpenSubtitles API needs the show id plus those numbers.
+function parseVideoId(id) {
+  const raw = String(id || '');
+  const m = /(tt\d{5,})/i.exec(raw);
+  let season = null;
+  let episode = null;
+  if (m) {
+    const rest = raw.slice(m.index + m[0].length);
+    const parts = rest.split(':').filter((p) => p !== '');
+    if (parts.length >= 2) {
+      const sn = Number(parts[0]);
+      const ep = Number(parts[1]);
+      if (Number.isInteger(sn)) season = sn;
+      if (Number.isInteger(ep)) episode = ep;
+    }
+  }
+  return { imdbId: m ? m[1] : null, season, episode };
 }
 
-function buildTrackUrl(base, cfg, type, id, videoHash, candidate) {
+function buildTrackUrl(base, cfg, type, id, videoHash, videoSize, candidate) {
   const qs = new URLSearchParams({
     id: `${type}:${id}`,
     hash: String(videoHash),
+    size: String(videoSize || ''),
     lang: cfg.targetCode,
     source: cfg.sourceCode,
     provider: cfg.providerId,
@@ -176,7 +192,7 @@ function variantLabel(candidate, langName, duplicate) {
   return label;
 }
 
-function buildVariantTracks(base, cfg, candidates, type, id, videoHash) {
+function buildVariantTracks(base, cfg, candidates, type, id, videoHash, videoSize) {
   const hash8 = String(videoHash).slice(0, 8);
   const tracks = [];
   const withAutoTrack = cfg.sourceCode === 'auto';
@@ -206,7 +222,7 @@ function buildVariantTracks(base, cfg, candidates, type, id, videoHash) {
       if (tracks.length >= MAX_SOURCE_TRACKS) break;
       tracks.push({
         id: `ai-${cfg.providerId}-${cfg.targetCode}-${c.fileId}-${hash8}`,
-        url: buildTrackUrl(base, cfg, type, id, videoHash, c),
+        url: buildTrackUrl(base, cfg, type, id, videoHash, videoSize, c),
         lang: cfg.targetCode,
         label: variantLabel(c, langName, list.length > 1),
       });
@@ -216,7 +232,7 @@ function buildVariantTracks(base, cfg, candidates, type, id, videoHash) {
   if (withAutoTrack) {
     tracks.unshift({
       id: `ai-${cfg.providerId}-${cfg.targetCode}-auto-${hash8}`,
-      url: buildTrackUrl(base, cfg, type, id, videoHash, null),
+      url: buildTrackUrl(base, cfg, type, id, videoHash, videoSize, null),
       lang: cfg.targetCode,
       label: 'AI translate (best match)',
     });
@@ -237,7 +253,8 @@ async function subtitlesHandler(req, res) {
 
   const extra = req.params.extra ? parseExtra(req.params.extra) : {};
   const query = { ...extra, ...req.query };
-  const videoHash = query.videoHash || query.video_size || '';
+  const videoHash = query.videoHash || '';
+  const videoSize = query.videoSize || '';
 
   if (!videoHash) return res.json({ subtitles: [] });
 
@@ -257,11 +274,15 @@ async function subtitlesHandler(req, res) {
   }
 
   const os = getOSClient(cfg.osApiKey);
+  const { imdbId, season, episode } = parseVideoId(id);
   try {
     const candidates = await os.searchBest({
       videoHash,
-      imdbId: extractImdbId(id),
+      videoSize,
+      imdbId,
       type: type === 'movie' ? 'movie' : 'episode',
+      season,
+      episode,
       languages: cfg.sourceCode === 'auto' ? null : [cfg.sourceCode],
       limit: 15,
     });
@@ -269,7 +290,7 @@ async function subtitlesHandler(req, res) {
       return makeErrorTrack('no-subs',
         `AI Subtitle Translator: no source subtitles found for this video (hash ${videoHash.slice(0, 8)}…).`);
     }
-    const subtitles = buildVariantTracks(base, cfg, candidates, type, id, videoHash);
+    const subtitles = buildVariantTracks(base, cfg, candidates, type, id, videoHash, videoSize);
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-if-error=86400');
     res.json({ subtitles });
   } catch (err) {
@@ -303,11 +324,18 @@ app.get('/subtitle.vtt', async (req, res) => {
     let candidate;
     if (!q.fileId || q.mode === 'auto') {
       // "Best match" variant: resolve the best source right now.
-      const [type, videoId] = String(q.id || '').split(':');
+      const rawId = String(q.id || '');
+      const sep = rawId.indexOf(':');
+      const idType = sep >= 0 ? rawId.slice(0, sep) : '';
+      const videoPart = sep >= 0 ? rawId.slice(sep + 1) : rawId;
+      const { imdbId, season, episode } = parseVideoId(videoPart);
       const found = await os.searchBest({
         videoHash: q.hash,
-        imdbId: extractImdbId(videoId),
-        type: type === 'movie' ? 'movie' : 'episode',
+        videoSize: q.size,
+        imdbId,
+        type: idType === 'movie' ? 'movie' : 'episode',
+        season,
+        episode,
         languages: q.source && q.source !== 'auto' ? [q.source] : null,
       });
       candidate = found[0];

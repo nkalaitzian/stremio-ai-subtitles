@@ -134,8 +134,10 @@ Set `HOST=0.0.0.0` to listen on all interfaces (default). Then share/install
   Stremio was given an `https://` URL. Paste exactly `http://127.0.0.1:7000/manifest.json` (keep the
   `http://` prefix and the port) and make sure `npm start` is still running. Stremio only accepts
   plain HTTP for `127.0.0.1`; anything public must be HTTPS.
-- **"No source subtitles found for this video"** — OpenSubtitles has no entry for this exact release;
-  try another release/stream, or set a specific source language.
+- **"No source subtitles found for this video"** — OpenSubtitles returned nothing for this file's
+  video hash *and* its IMDb id (for episodes: the show id + season/episode). Try another
+  release/stream, or set a specific source language. A **wrong OpenSubtitles key** shows
+  "OpenSubtitles login failed" instead, so the two cases are distinguishable.
 - **Translation is out of sync or badly transcribed** — open the subtitle menu and pick a different
   source variant (*AI from …* tracks); each one is a different source subtitle file. If the config's
   **Source subtitle language** is set to a specific language, only variants of that language appear.
