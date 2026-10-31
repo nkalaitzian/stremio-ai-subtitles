@@ -67,3 +67,8 @@ jobs:
           # A tag checkout is a detached HEAD, so the destination ref must be
           # fully qualified or git refuses to guess what "master" means.
           git push beamup HEAD:refs/heads/master --force
+          # BeamUp forwards only the internal app slug as Host (no
+          # X-Forwarded-Host), so tell the addon its real public origin.
+          PUBLIC_HOST="${HASH}-${BEAMUP_PROJECT}.${BEAMUP_HOST#a.}"
+          ssh -o StrictHostKeyChecking=yes "dokku@${BEAMUP_HOST}" \
+            config:set "${HASH}/${BEAMUP_PROJECT}" "PUBLIC_URL=https://${PUBLIC_HOST}"

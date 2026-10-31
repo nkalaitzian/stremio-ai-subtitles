@@ -18,7 +18,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 - **Location:** `D:\Development\stremio-ai-subtitles` (moved here from `C:\Users\nikos\.deepseek` — do not look for it there)
 - **GitHub:** https://github.com/nkalaitzian/stremio-ai-subtitles (public, `main` branch, origin set)
 - **gh CLI:** authenticated as `nkalaitzian`. **git identity:** Nikos Kalaitzian <nikoskalai@gmail.com>
-- **Version:** 1.1.8 (manifest + package.json — keep in sync)
+- **Version:** 1.1.9 (manifest + package.json — keep in sync)
 - **Stack:** Node.js ≥18 (tested on Node 26), Express 4, **zero other runtime deps** (uses global `fetch`, `crypto`, `fs`). CommonJS.
 - **Environment:** Windows (PowerShell), user locale Europe/Athens (Greek default target language is intentional).
 
@@ -227,6 +227,9 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   `X-Forwarded-Host`/`X-Forwarded-Proto`, then `Host`. BeamUp rewrites `Host` to the internal app
   slug (e.g. `d0d76533837f-stremio-ai-subtitles`), so every `/subtitle.vtt` URL pointed at a
   non-existent host and playback failed with "subtitle won't load".
+- v1.1.9 makes the deploy workflow set `PUBLIC_URL=https://<hash>-<project>.baby-beamup.club` via
+  `ssh dokku@… config:set` after the push. BeamUp sends neither the public `Host` nor
+  `X-Forwarded-Host`, so this is the only reliable way to build absolute track URLs there.
 - Added `.github/workflows/deploy.yml`: runs the E2E tests, then force-pushes the tagged commit to
   BeamUp (`dokku@a.baby-beamup.club:<hash>/stremio-ai-subtitles`) on **tag pushes** (any tag) and
   manual `workflow_dispatch` — normal pushes to main do not deploy. BeamUp auth is a dedicated SSH
