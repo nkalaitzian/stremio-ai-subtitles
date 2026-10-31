@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 60/60 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 61/61 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -46,8 +46,8 @@ src/
   server.js          Express app + routes (the protocol surface). Read this to understand endpoints.
   config.js          Language list, provider registry, config schema, /configure HTML page
                      (remembers non-secret settings in localStorage; links the OpenSubtitles
-                     consumers page), config parsing (path-segment JSON / base64 / query params),
-                     prompt rendering.
+                     consumers page, the GitHub repo and the Ko-fi page), config parsing
+                     (path-segment JSON / base64 / query params), prompt rendering.
   providers.js       AI adapters, one contract: translateChunk({provider, lines, from, to, prompt,
                      model, baseUrl, apiKey}) -> Promise<string[]>. `provider` is the registry id
                      (accepts `providerId` too); it resolves the provider's default model/baseUrl.
@@ -198,7 +198,7 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   missed it because they used `custom` with an explicit base URL). `translateChunk` now accepts
   both names. Translation failures now show the ⚠ cue at the **start** of the video instead of the
   end.
-- All tests pass: **60/60** (`npm test`). Nothing is currently broken or in progress.
+- All tests pass: **61/61** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),

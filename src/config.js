@@ -52,6 +52,9 @@ const LANGUAGES = [
 
 const AUTO_OPTION = 'auto – Any available (prefer English)';
 
+const GITHUB_URL = 'https://github.com/nkalaitzian/stremio-ai-subtitles';
+const KOFI_URL = 'https://ko-fi.com/pastouris';
+
 const langOption = (l) => `${l.code} – ${l.name}`;
 
 function codeFromOption(option) {
@@ -337,6 +340,9 @@ function configureHtml() {
   button:hover { background: #9b68bd; }
   .url { margin-top: 18px; font-size: .8rem; color: #9a9ab0; word-break: break-all; }
   .hint { font-size: .78rem; color: #7f7f95; margin-top: 6px; }
+  .links { margin-top: 20px; padding-top: 14px; border-top: 1px solid #3d3d4d; font-size: .82rem; color: #7f7f95; }
+  .links a { color: #a98bd6; text-decoration: none; }
+  .links a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -350,6 +356,11 @@ function configureHtml() {
   <div class="url" id="url"></div>
   <p class="hint">Paste the URL above into Stremio → Addons → "Add addon". Stremio accepts plain http:// only for 127.0.0.1 addresses — make sure the addon server is running.</p>
   <p class="hint">Reconfiguring? Stremio requires you to <b>remove the old install first</b>, then paste the new URL. Your non-secret settings are remembered here, so you only re-enter the API keys.</p>
+  <p class="links">
+    <a href="${GITHUB_URL}" target="_blank" rel="noopener">GitHub project</a>
+    <span>·</span>
+    <a href="${KOFI_URL}" target="_blank" rel="noopener">☕ Support on Ko-fi</a>
+  </p>
 </div>
 <script>
   const keys = ${JSON.stringify(schema.map((e) => e.key))};
@@ -430,6 +441,9 @@ function landingHtml() {
   p { color: #9a9ab0; line-height: 1.5; }
   a.btn { display: inline-block; background: #8a5aab; color: #fff; text-decoration: none; border-radius: 8px; padding: 12px 26px; font-weight: 600; margin-top: 12px; }
   code { background: #26262f; padding: 2px 6px; border-radius: 4px; }
+  .links { margin-top: 22px; font-size: .85rem; color: #7f7f95; }
+  .links a { color: #a98bd6; text-decoration: none; }
+  .links a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -438,6 +452,11 @@ function landingHtml() {
   <p>Stremio addon that translates subtitles into a language you pick, using AI providers such as OpenAI, Anthropic, DeepSeek, Grok, Gemini and DeepL.</p>
   <a class="btn" href="/configure">Configure &amp; Install</a>
   <p style="margin-top:20px;font-size:.85rem">Or paste this URL into Stremio's "Add addon" box:<br><code id="u"></code></p>
+  <p class="links">
+    <a href="${GITHUB_URL}" target="_blank" rel="noopener">GitHub project</a>
+    <span>·</span>
+    <a href="${KOFI_URL}" target="_blank" rel="noopener">☕ Support on Ko-fi</a>
+  </p>
 </div>
 <script>document.getElementById('u').textContent = location.protocol + '//' + location.host + '/manifest.json';</script>
 </body>

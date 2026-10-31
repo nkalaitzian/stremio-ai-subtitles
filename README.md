@@ -111,16 +111,54 @@ Run the tests with `npm test` — it boots mock upstream services and checks the
 
 ## Deploying publicly
 
-Stremio requires **HTTPS** for any addon not on `127.0.0.1`. Deploy this Express app anywhere that
-gives you a public HTTPS URL — Render, Railway, Fly.io, a VPS behind Caddy/nginx, or
-[BeamUp](https://beamup.dev/) (the Stremio team's free hosting). Example with a process manager:
+Stremio requires **HTTPS** for any addon not on `127.0.0.1`. The app is stateless — there is no
+database and no server-side account. Each user's settings (provider, keys, language, prompt) ride
+in their **own** configured addon URL; the server only holds disposable caches in `.cache/`.
+
+### Render (quickest — deploy straight from GitHub)
+
+1. Push this repo to GitHub (it already lives at
+   [github.com/nkalaitzian/stremio-ai-subtitles](https://github.com/nkalaitzian/stremio-ai-subtitles)).
+2. In [Render](https://render.com): **New → Web Service**, connect the repo.
+3. Set **Runtime: Node**, **Build Command: `npm install`**, **Start Command: `npm start`**.
+   Render injects `PORT`; the server reads it. `HOST` already defaults to `0.0.0.0`.
+4. Deploy, then open `https://<your-service>.onrender.com/configure`, fill in the form, and add the
+   generated URL to Stremio. The bare manifest URL is
+   `https://<your-service>.onrender.com/manifest.json`.
+
+> Render's **free** tier spins the service down when idle; the first request afterwards can take
+> 30–60 s and may time out in Stremio. For everyday use pick an always-on instance (or a VPS).
+
+### VPS (always-on, full control)
 
 ```bash
-PORT=7000 node src/server.js
+git clone https://github.com/nkalaitzian/stremio-ai-subtitles
+cd stremio-ai-subtitles
+npm install
+PORT=7000 HOST=0.0.0.0 node src/server.js   # run under systemd/pm2
 ```
 
-Set `HOST=0.0.0.0` to listen on all interfaces (default). Then share/install
-`https://your-domain/manifest.json`.
+Put Caddy in front for automatic HTTPS:
+
+```caddyfile
+addon.example.com {
+    reverse_proxy 127.0.0.1:7000
+}
+```
+
+Then install `https://addon.example.com/manifest.json`.
+
+Railway, Fly.io and [BeamUp](https://beamup.dev/) work the same way — any host that runs `npm start`
+and gives you HTTPS. Fly.io needs a Dockerfile; ask if you want one added to the repo.
+
+### Public hosting notes
+
+- **Never bake your own keys into a public instance.** Each visitor opens `/configure`, enters their
+  own provider/OpenSubtitles keys, and installs their own URL. Nothing is shared or stored.
+- Keep the `/configure` page public — it is the install page — but treat the generated addon URLs
+  as secrets (they contain the user's keys).
+- The addon URL must be reachable from the user's Stremio. A cold/offline server shows up as a
+  failed or empty subtitle list.
 
 ## Privacy & security notes
 

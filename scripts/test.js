@@ -107,6 +107,9 @@ async function main() {
   check('HTML configure page links opensubtitles.com/consumers',
     confHtml.text.includes('<a href="https://www.opensubtitles.com/en/consumers" target="_blank"'));
   check('HTML configure page remembers non-secret settings', confHtml.text.includes('localStorage'));
+  check('HTML configure page links GitHub and Ko-fi',
+    confHtml.text.includes('https://github.com/nkalaitzian/stremio-ai-subtitles') &&
+    confHtml.text.includes('https://ko-fi.com/pastouris'));
 
   // ---- 3. Configured manifest --------------------------------------------
   console.log('\n[3] configured manifest.json');
