@@ -325,7 +325,7 @@ function configureHtml(initialConfig) {
   }).join('');
 
   const subText = initial
-    ? 'Editing an installed add-on. Copy the updated URL, then remove the old install in Stremio and paste it again.'
+    ? 'Editing an installed add-on. Install the updated add-on, or copy the URL. If you changed anything, remove the old install first.'
     : 'Pick the AI provider, API key, target language and translation prompt, then install the addon into Stremio.';
 
   return `<!DOCTYPE html>
@@ -398,9 +398,9 @@ function configureHtml(initialConfig) {
     document.getElementById('url').textContent = 'Addon URL: ' + plainUrl;
 
     // stremio:// deep links are rewritten to https:// by the app, which fails on
-    // a plain-HTTP local server. And on the gear page (an installed add-on) the
-    // new URL would install as a second add-on, so only offer copy there.
-    const canInstall = !INITIAL && !isLocal;
+    // a plain-HTTP local server — there, only copying the URL works. Everywhere
+    // else offer both install and copy (the gear page included).
+    const canInstall = !isLocal;
     installBtn.hidden = !canInstall;
     if (canInstall) {
       installBtn.textContent = 'Install in Stremio';

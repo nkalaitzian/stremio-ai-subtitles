@@ -18,7 +18,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 - **Location:** `D:\Development\stremio-ai-subtitles` (moved here from `C:\Users\nikos\.deepseek` — do not look for it there)
 - **GitHub:** https://github.com/nkalaitzian/stremio-ai-subtitles (public, `main` branch, origin set)
 - **gh CLI:** authenticated as `nkalaitzian`. **git identity:** Nikos Kalaitzian <nikoskalai@gmail.com>
-- **Version:** 1.1.10 (manifest + package.json — keep in sync)
+- **Version:** 1.1.11 (manifest + package.json — keep in sync)
 - **Stack:** Node.js ≥18 (tested on Node 26), Express 4, **zero other runtime deps** (uses global `fetch`, `crypto`, `fs`). CommonJS.
 - **Environment:** Windows (PowerShell), user locale Europe/Athens (Greek default target language is intentional).
 
@@ -234,6 +234,10 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   under a reverse proxy's ~100s timeout. BeamUp/Cloudflare returns **504** when the first
   uncached full-movie VTT request runs longer than that; chunks are cached as they complete, so
   retries get progressively faster.
+- v1.1.11 shows the Install button on the gear page (`/:config/configure`) as well as Copy Link.
+  On public hosts both are shown; on localhost only copy is shown (`stremio://` is unusable there).
+  Installing a changed config still creates a second add-on, so the page warns to remove the old
+  install first.
 - Added `.github/workflows/deploy.yml`: runs the E2E tests, then force-pushes the tagged commit to
   BeamUp (`dokku@a.baby-beamup.club:<hash>/stremio-ai-subtitles`) on **tag pushes** (any tag) and
   manual `workflow_dispatch` — normal pushes to main do not deploy. BeamUp auth is a dedicated SSH
