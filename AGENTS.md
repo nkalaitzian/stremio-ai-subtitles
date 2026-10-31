@@ -76,6 +76,7 @@ scripts/
 .env.example         PORT/HOST/OPENSUBTITLES_BASE/CACHE_DIR (no secrets — keys are per-install config).
 .github/
   FUNDING.yml        Sponsorship links (Ko-fi: pastouris)
+  workflows/test.yml   `npm test` on every push to main and on pull requests.
   workflows/deploy.yml  CI: `npm test`, then deploy to BeamUp when a tag is pushed
                         (manual `workflow_dispatch` too). Needs the BEAMUP_SSH_KEY secret.
 ```
