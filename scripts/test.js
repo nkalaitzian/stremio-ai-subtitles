@@ -78,7 +78,7 @@ async function main() {
   check('resources include subtitles', manifest.json && manifest.json.resources.includes('subtitles'));
   check('types include movie and series', manifest.json && manifest.json.types.includes('movie') && manifest.json.types.includes('series'));
   check('configurationRequired is true', manifest.json && manifest.json.behaviorHints.configurationRequired === true);
-  check('manifest version is 1.1.9', manifest.json && manifest.json.version === '1.1.9');
+  check('manifest version is 1.1.10', manifest.json && manifest.json.version === '1.1.10');
   check('config schema has provider/apiKey/targetLang/prompt/osApiKey',
     manifest.json && ['provider', 'apiKey', 'targetLang', 'prompt', 'osApiKey'].every((k) => manifest.json.config.some((c) => c.key === k)));
   check('CORS header present', manifest.headers.get('access-control-allow-origin') === '*');
@@ -110,7 +110,7 @@ async function main() {
   check('HTML configure page links GitHub and Ko-fi',
     confHtml.text.includes('https://github.com/nkalaitzian/stremio-ai-subtitles') &&
     confHtml.text.includes('https://ko-fi.com/pastouris'));
-  check('HTML configure page shows the addon version', confHtml.text.includes('<p class="version">v1.1.9</p>'));
+  check('HTML configure page shows the addon version', confHtml.text.includes('<p class="version">v1.1.10</p>'));
   check('HTML configure page has Install and Copy Link buttons',
     confHtml.text.includes('id="install"') && confHtml.text.includes('id="copy"') && confHtml.text.includes('Copy Link'));
 

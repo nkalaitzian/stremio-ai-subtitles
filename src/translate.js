@@ -17,7 +17,10 @@ const { sanitize } = require('./subtitleFormat');
 
 const MAX_CHUNK_LINES = 40;
 const MAX_CHUNK_CHARS = 6000;
-const CONCURRENCY = 3;
+// Each chunk of cues is translated independently with limited concurrency.
+// Keep this high enough that a feature-length subtitle finishes inside a
+// reverse proxy's ~100s timeout (BeamUp/Cloudflare return 504 past that).
+const CONCURRENCY = 8;
 const MAX_MEM_ENTRIES = 1500;
 
 let diskDir = null;
