@@ -83,6 +83,16 @@ DeepL free endpoint · LibreTranslate public instance · Google free endpoint.
 You can **install the addon multiple times** (different languages or providers per install) — each
 configured install is treated as its own addon.
 
+## Reconfiguring an installed add-on
+
+Installed add-ons show a **⚙ Configure** button on their card in *Stremio → Addons*. It opens the
+same form, pre-filled with the current settings, at `/<config>/configure`.
+
+Because the configuration is part of the add-on URL, saving changes produces a **new URL**: copy
+it, remove the old install, then paste the new one in. Stremio only replaces an add-on when the
+transport URL is identical, so it can't update a changed config in place — that's why the page's
+button says *Copy updated addon URL* rather than installing directly.
+
 ## How the configuration reaches the addon
 
 This follows the official Stremio addon protocol: the addon declares
@@ -96,7 +106,7 @@ settings into every subtitle track URL it returns.
 
 ```
 src/
-  server.js         Express server: /manifest.json, /configure, /subtitles/*, /subtitle.vtt
+  server.js         Express server: /manifest.json, /configure, /:config/configure, /subtitles/*, /subtitle.vtt
   config.js         Languages, provider registry, config schema, configure HTML page
   providers.js      AI provider adapters (one translate() contract)
   opensubtitles.js  OpenSubtitles.com client (login, search by hash/IMDB, download, caching)

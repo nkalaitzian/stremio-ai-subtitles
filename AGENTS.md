@@ -18,7 +18,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 - **Location:** `D:\Development\stremio-ai-subtitles` (moved here from `C:\Users\nikos\.deepseek` — do not look for it there)
 - **GitHub:** https://github.com/nkalaitzian/stremio-ai-subtitles (public, `main` branch, origin set)
 - **gh CLI:** authenticated as `nkalaitzian`. **git identity:** Nikos Kalaitzian <nikoskalai@gmail.com>
-- **Version:** 1.1.4 (manifest + package.json — keep in sync)
+- **Version:** 1.1.5 (manifest + package.json — keep in sync)
 - **Stack:** Node.js ≥18 (tested on Node 26), Express 4, **zero other runtime deps** (uses global `fetch`, `crypto`, `fs`). CommonJS.
 - **Environment:** Windows (PowerShell), user locale Europe/Athens (Greek default target language is intentional).
 
@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 61/61 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 63/63 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -87,8 +87,15 @@ scripts/
 - `GET /manifest.json` — manifest with `resources: ["subtitles"]`, `types: ["movie","series"]`,
   `idPrefixes: ["tt"]`, `catalogs: []`, `behaviorHints: {configurable: true, configurationRequired: true}`,
   and a `config` array (the config screen schema).
-- `GET /:configPath/manifest.json` — same, but `configurationRequired`/`configurable` are dropped
-  (mirrors the SDK: a configured addon is installable as-is).
+- `GET /:configPath/manifest.json` — same, but `configurationRequired` is `false` while `configurable`
+  stays `true`: Stremio's add-on page then shows the ⚙ Configure button (its `Addon` component
+  requires `!configurationRequired && configurable`). The SDK drops `configurable`; we keep it so the
+  settings page is reachable without a manual reinstall.
+- `GET /:configPath/configure` — what the ⚙ button opens (Stremio does
+  `transportUrl.replace('manifest.json', 'configure')`). Serves the same HTML form, pre-filled from
+  the path config (including the keys). Saving still yields a new URL, so the browser page offers
+  "Copy updated addon URL" and the user must remove the old install first — Stremio's `InstallAddon`
+  only replaces add-ons by identical transport URL, never by manifest id.
 - `GET /configure` — content negotiation: `Accept: text/html` → human page with a real `<textarea>`
   for the prompt; otherwise JSON `{ config: [...] }`. (Served both ways for old/new clients.)
 - `GET [/ :configPath]/subtitles/:type/:id[/ :extra].json` — the subtitle list. `:extra` is a
@@ -203,12 +210,19 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   missed it because they used `custom` with an explicit base URL). `translateChunk` now accepts
   both names. Translation failures now show the ⚠ cue at the **start** of the video instead of the
   end.
+- v1.1.5 exposes Stremio's ⚙ Configure button on installed add-ons: the configured manifest keeps
+  `configurable: true` (with `configurationRequired: false`) and the addon serves
+  `GET /:configPath/configure`, pre-filled with the installed settings. Saving still produces a new
+  URL, so the page hands over a copy of it and the user must remove the old install first —
+  Stremio's `InstallAddon` replaces only on identical transport URL, never by manifest id. (A true
+  in-place edit would require server-side config keyed by a stable ID; deliberately not done to
+  keep the server stateless.)
 - Added `.github/workflows/deploy.yml`: runs the E2E tests, then force-pushes the tagged commit to
   BeamUp (`dokku@a.baby-beamup.club:<hash>/stremio-ai-subtitles`) on **tag pushes** (any tag) and
   manual `workflow_dispatch` — normal pushes to main do not deploy. BeamUp auth is a dedicated SSH
   key whose public half is on the GitHub account; the private half lives in the `BEAMUP_SSH_KEY`
   repo secret.
-- All tests pass: **61/61** (`npm test`). Nothing is currently broken or in progress.
+- All tests pass: **63/63** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),

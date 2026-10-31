@@ -39,7 +39,7 @@ function getOSClient(apiKey) {
 function buildManifest(configured) {
   const manifest = {
     id: 'com.stremio.aisubtitletranslator',
-    version: '1.1.4',
+    version: '1.1.5',
     name: 'AI Subtitle Translator',
     description: 'Translates subtitles to a language you pick, using AI providers (OpenAI, Anthropic, DeepSeek, Grok, Gemini, DeepL and more).',
     resources: ['subtitles'],
@@ -53,8 +53,10 @@ function buildManifest(configured) {
     config: config.configSchema(),
   };
   if (configured) {
-    // Mirrors the SDK: once configured the addon is installable as-is.
-    manifest.behaviorHints.configurable = false;
+    // Keep `configurable` so Stremio shows the gear on the installed add-on
+    // (clicking it opens /<config>/configure). The SDK drops this flag, but
+    // then the only way into the settings page is a manual reinstall.
+    manifest.behaviorHints.configurable = true;
     manifest.behaviorHints.configurationRequired = false;
   }
   return manifest;
@@ -86,6 +88,18 @@ app.get('/configure', (req, res) => {
   if (/text\/html/.test(accept)) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(config.configureHtml());
+  }
+  res.json({ config: config.configSchema() });
+});
+
+// Stremio's Configure gear opens "<transportUrl without manifest.json>/configure",
+// i.e. this route for an installed add-on. Pre-fill the current settings.
+app.get('/:configPath/configure', (req, res) => {
+  const accept = req.headers.accept || '';
+  const raw = config.parseConfigSegment(req.params.configPath);
+  if (/text\/html/.test(accept)) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(config.configureHtml(raw));
   }
   res.json({ config: config.configSchema() });
 });

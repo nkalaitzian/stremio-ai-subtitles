@@ -294,8 +294,9 @@ function renderPrompt(prompt, cfg) {
 // Served when the request Accepts text/html; otherwise /configure returns JSON.
 // ---------------------------------------------------------------------------
 
-function configureHtml() {
+function configureHtml(initialConfig) {
   const schema = configSchema();
+  const initial = initialConfig && typeof initialConfig === 'object' ? initialConfig : null;
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   const fields = schema.map((entry) => {
@@ -305,20 +306,24 @@ function configureHtml() {
       '<a href="https://www.opensubtitles.com/en/consumers" target="_blank" rel="noopener">opensubtitles.com/consumers</a>'
     );
     const title = `<label for="${entry.key}">${labelText}</label>`;
+    const value = initial && typeof initial[entry.key] === 'string' ? initial[entry.key] : (entry.default || '');
     if (entry.type === 'select') {
       const opts = entry.options.map((o) => {
-        const selected = o === entry.default ? ' selected' : '';
+        const selected = o === value ? ' selected' : '';
         return `<option value="${esc(o)}"${selected}>${esc(o)}</option>`;
       }).join('');
       return `<div class="field">${title}<select id="${entry.key}">${opts}</select></div>`;
     }
     if (entry.key === 'prompt') {
-      const def = esc(entry.default || '');
-      return `<div class="field">${title}<textarea id="${entry.key}" rows="6">${def}</textarea></div>`;
+      return `<div class="field">${title}<textarea id="${entry.key}" rows="6">${esc(value)}</textarea></div>`;
     }
     const type = entry.type === 'password' ? 'password' : 'text';
-    return `<div class="field">${title}<input type="${type}" id="${entry.key}" value="${esc(entry.default || '')}"></div>`;
+    return `<div class="field">${title}<input type="${type}" id="${entry.key}" value="${esc(value)}"></div>`;
   }).join('');
+
+  const subText = initial
+    ? 'Editing an installed add-on. Copy the updated URL, then remove the old install in Stremio and paste it again.'
+    : 'Pick the AI provider, API key, target language and translation prompt, then install the addon into Stremio.';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -348,7 +353,7 @@ function configureHtml() {
 <body>
 <div class="box">
   <h1>AI Subtitle Translator</h1>
-  <p class="sub">Pick the AI provider, API key, target language and translation prompt, then install the addon into Stremio.</p>
+  <p class="sub">${subText}</p>
   <form id="form" onsubmit="return false;">
     ${fields}
     <button id="install">Install in Stremio</button>
@@ -365,6 +370,7 @@ function configureHtml() {
 <script>
   const keys = ${JSON.stringify(schema.map((e) => e.key))};
   const secretKeys = ${JSON.stringify(schema.filter((e) => e.type === 'password').map((e) => e.key))};
+  const INITIAL = ${JSON.stringify(initial)};
   const STORAGE_KEY = 'aisubtitles.config.v1';
   function buildPath() {
     const config = {};
@@ -380,7 +386,16 @@ function configureHtml() {
     const isLocal = ['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
     const btn = document.getElementById('install');
     document.getElementById('url').textContent = 'Addon URL: ' + plainUrl;
-    if (isLocal) {
+    if (INITIAL) {
+      // Opened from the gear on an installed add-on: nothing can update the
+      // installed transport URL in place, so hand over the new URL to re-add.
+      btn.textContent = 'Copy updated addon URL';
+      btn.onclick = () => {
+        navigator.clipboard.writeText(plainUrl)
+          .then(() => { btn.textContent = 'Copied — remove the old install, then paste this URL'; })
+          .catch(() => { window.prompt('Copy this URL and paste it into Stremio:', plainUrl); });
+      };
+    } else if (isLocal) {
       // stremio:// deep links are rewritten to https:// by the app, which fails
       // on a plain-HTTP local server — so copy the http:// URL instead.
       btn.textContent = 'Copy addon URL';
@@ -397,6 +412,7 @@ function configureHtml() {
   // Remember the non-secret fields between visits so reconfiguring doesn't mean
   // retyping everything. API keys are never persisted.
   function loadSaved() {
+    if (INITIAL) return; // the installed config is authoritative
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
       if (saved && typeof saved === 'object') {

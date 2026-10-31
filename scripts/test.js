@@ -78,7 +78,7 @@ async function main() {
   check('resources include subtitles', manifest.json && manifest.json.resources.includes('subtitles'));
   check('types include movie and series', manifest.json && manifest.json.types.includes('movie') && manifest.json.types.includes('series'));
   check('configurationRequired is true', manifest.json && manifest.json.behaviorHints.configurationRequired === true);
-  check('manifest version is 1.1.4', manifest.json && manifest.json.version === '1.1.4');
+  check('manifest version is 1.1.5', manifest.json && manifest.json.version === '1.1.5');
   check('config schema has provider/apiKey/targetLang/prompt/osApiKey',
     manifest.json && ['provider', 'apiKey', 'targetLang', 'prompt', 'osApiKey'].every((k) => manifest.json.config.some((c) => c.key === k)));
   check('CORS header present', manifest.headers.get('access-control-allow-origin') === '*');
@@ -117,6 +117,11 @@ async function main() {
   const confManifest = await get(`${base}/${configPath}/manifest.json`);
   check('configured manifest drops configurationRequired',
     confManifest.json && confManifest.json.behaviorHints.configurationRequired === false);
+  check('configured manifest keeps configurable (Stremio gear)',
+    confManifest.json && confManifest.json.behaviorHints.configurable === true);
+  const installConf = await get(`${base}/${configPath}/configure`, { Accept: 'text/html' });
+  check('installed add-on configure page is pre-filled with its settings',
+    installConf.text.includes('value="test-llm-key"') && installConf.text.includes('Copy updated addon URL'));
 
   // ---- 4. Subtitle list with per-source variants --------------------------
   console.log('\n[4] subtitle list: labeled variants per source subtitle');
