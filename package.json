@@ -1,6 +1,6 @@
 {
   "name": "stremio-ai-subtitles",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "private": true,
   "description": "Stremio addon that translates subtitles to a user-selected language with AI providers (OpenAI, Anthropic, DeepSeek, Grok, Gemini, DeepL and more), configured from Stremio's addon configuration screen.",
   "main": "src/server.js",

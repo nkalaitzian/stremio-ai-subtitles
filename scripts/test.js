@@ -78,7 +78,7 @@ async function main() {
   check('resources include subtitles', manifest.json && manifest.json.resources.includes('subtitles'));
   check('types include movie and series', manifest.json && manifest.json.types.includes('movie') && manifest.json.types.includes('series'));
   check('configurationRequired is true', manifest.json && manifest.json.behaviorHints.configurationRequired === true);
-  check('manifest version is 1.1.7', manifest.json && manifest.json.version === '1.1.7');
+  check('manifest version is 1.1.8', manifest.json && manifest.json.version === '1.1.8');
   check('config schema has provider/apiKey/targetLang/prompt/osApiKey',
     manifest.json && ['provider', 'apiKey', 'targetLang', 'prompt', 'osApiKey'].every((k) => manifest.json.config.some((c) => c.key === k)));
   check('CORS header present', manifest.headers.get('access-control-allow-origin') === '*');
@@ -110,7 +110,7 @@ async function main() {
   check('HTML configure page links GitHub and Ko-fi',
     confHtml.text.includes('https://github.com/nkalaitzian/stremio-ai-subtitles') &&
     confHtml.text.includes('https://ko-fi.com/pastouris'));
-  check('HTML configure page shows the addon version', confHtml.text.includes('<p class="version">v1.1.7</p>'));
+  check('HTML configure page shows the addon version', confHtml.text.includes('<p class="version">v1.1.8</p>'));
   check('HTML configure page has Install and Copy Link buttons',
     confHtml.text.includes('id="install"') && confHtml.text.includes('id="copy"') && confHtml.text.includes('Copy Link'));
 
@@ -131,6 +131,14 @@ async function main() {
   const subsRes = await get(`${base}/${configPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`);
   check('returns subtitles array', subsRes.json && Array.isArray(subsRes.json.subtitles));
   const subs = subsRes.json && subsRes.json.subtitles ? subsRes.json.subtitles : [];
+  const proxied = await get(`${base}/${configPath}/subtitles/movie/tt0000001/videoHash=deadbeef&videoSize=1234.json`, {
+    'X-Forwarded-Host': 'addon.example.com',
+    'X-Forwarded-Proto': 'https',
+  });
+  const proxiedTrack = proxied.json && proxied.json.subtitles && proxied.json.subtitles[0];
+  check('track URLs honour X-Forwarded-Host',
+    !!proxiedTrack && proxiedTrack.url.startsWith('https://addon.example.com/'),
+    proxiedTrack && proxiedTrack.url.slice(0, 60));
   check('one track per source + one auto track (4 total)', subs.length === 4, `got ${subs.length}`);
   check('all tracks carry the target language', subs.every((t) => t.lang === cfg.targetLang.split('–')[0].trim()));
   check('all tracks have a label', subs.every((t) => typeof t.label === 'string' && t.label.length > 0));

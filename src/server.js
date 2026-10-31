@@ -124,9 +124,19 @@ function parseExtra(segment) {
   return out;
 }
 
+function firstHeader(value) {
+  return String(value || '').split(',')[0].trim();
+}
+
+// PUBLIC_URL wins when set; otherwise trust the proxy headers. Some hosts
+// (BeamUp) rewrite the Host header to the internal app slug, which would make
+// every subtitle-track URL point at a non-existent host.
 function baseUrl(req) {
-  const proto = req.headers['x-forwarded-proto'] === 'https' || req.secure ? 'https' : 'http';
-  return `${proto}://${req.get('host')}`;
+  const publicUrl = String(process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+  if (publicUrl) return publicUrl;
+  const proto = firstHeader(req.headers['x-forwarded-proto']) || (req.secure ? 'https' : 'http');
+  const host = firstHeader(req.headers['x-forwarded-host']) || req.get('host');
+  return `${proto}://${host}`;
 }
 
 // Stremio sends series episodes as "tt1234567:season:episode". The
