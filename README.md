@@ -261,8 +261,10 @@ it redeploys automatically when you connect the repo.)
 - **Google Translate fails with 429** — the free endpoint is rate-limited; prefer a keyed provider.
 - **Series** — Stremio sends the episode video id and hash, so per-episode subtitles are matched
   exactly like movies.
-- **Empty track list** — the addon only answers requests that include a `videoHash` (torrent/local
-  files provide it; some HTTP streams don't).
+- **Empty track list** — this should no longer happen silently. Streams without a `videoHash`
+  fall back to the IMDb id; if the stream has neither, a `⚠ AI Subtitle Translator` track appears
+  with the reason. Every other list-side failure (missing key, search error, no sources) also shows
+  as a ⚠ track — select it to see the full message in the player.
 - Check the server console for per-request errors.
 
 ## License

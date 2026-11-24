@@ -18,7 +18,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 - **Location:** `D:\Development\stremio-ai-subtitles` (moved here from `C:\Users\nikos\.deepseek` — do not look for it there)
 - **GitHub:** https://github.com/nkalaitzian/stremio-ai-subtitles (public, `main` branch, origin set)
 - **gh CLI:** authenticated as `nkalaitzian`. **git identity:** Nikos Kalaitzian <nikoskalai@gmail.com>
-- **Version:** 1.1.11 (manifest + package.json — keep in sync)
+- **Version:** 1.1.12 (manifest + package.json — keep in sync)
 - **Stack:** Node.js ≥18 (tested on Node 26), Express 4, **zero other runtime deps** (uses global `fetch`, `crypto`, `fs`). CommonJS.
 - **Environment:** Windows (PowerShell), user locale Europe/Athens (Greek default target language is intentional).
 
@@ -28,7 +28,7 @@ on **Stremio's addon configuration screen before install** (protocol-driven, no 
 cd D:\Development\stremio-ai-subtitles
 npm install      # deps already installed
 npm start        # run addon on http://127.0.0.1:7000
-npm test         # 66/66 end-to-end checks with mocked upstreams (no real keys needed)
+npm test         # 67/67 end-to-end checks with mocked upstreams (no real keys needed)
 git pull/push    # commit/push as usual
 ```
 
@@ -58,7 +58,7 @@ src/
                      On-disk source cache (30-day TTL).
   subtitleFormat.js  SRT/WebVTT parsing -> cue objects; toVtt(); sanitize() strips tags/ASS overrides;
                      errorVtt() renders in-player error cues.
-  translate.js       Chunked translation (≤40 lines or ≤6000 chars per chunk, concurrency 3),
+  translate.js       Chunked translation (≤40 lines or ≤6000 chars per chunk, concurrency 8),
                      two-level cache (memory Map + JSON files under .cache/tr), key =
                      sha1(provider|model|baseUrl|from|to|prompt|lines). Failed chunks keep original
                      text and append a ⚠ cue.
@@ -70,7 +70,8 @@ scripts/
                      manifest, /configure (JSON+HTML), configured manifest, variant track list,
                      OpenSubtitles request format + IMDb fallback, series episode lookup,
                      translated VTT from a chosen source, cache hits, auto-track behavior,
-                     French re-translation, error tracks (missing/invalid API key), empty list,
+                     French re-translation, error tracks (missing/invalid API key), no-hash IMDb
+                     fallback + visible error track,
                      defaults, source-language filtering, provider defaults (deepseek with an
                      empty model), and the early ⚠ cue for failed chunks.
 .env.example         PORT/HOST/OPENSUBTITLES_BASE/CACHE_DIR (no secrets — keys are per-install config).
@@ -238,12 +239,17 @@ to line splitting + length matching). DeepL/LibreTranslate/Google use their nati
   On public hosts both are shown; on localhost only copy is shown (`stremio://` is unusable there).
   Installing a changed config still creates a second add-on, so the page warns to remove the old
   install first.
+- v1.1.12 stops returning a silent empty list: streams without a `videoHash` now fall back to the
+  IMDb id (the old code bailed with `{subtitles: []}` before searching), and when there is neither
+  a hash nor an IMDb id the list returns a visible `ai-error-no-video-id` error track. All list-side
+  failures therefore surface as a ⚠ track under the target language; Stremio has no toast API, so
+  this error track is the only UI channel an addon has.
 - Added `.github/workflows/deploy.yml`: runs the E2E tests, then force-pushes the tagged commit to
   BeamUp (`dokku@a.baby-beamup.club:<hash>/stremio-ai-subtitles`) on **tag pushes** (any tag) and
   manual `workflow_dispatch` — normal pushes to main do not deploy. BeamUp auth is a dedicated SSH
   key whose public half is on the GitHub account; the private half lives in the `BEAMUP_SSH_KEY`
   repo secret.
-- All tests pass: **66/66** (`npm test`). Nothing is currently broken or in progress.
+- All tests pass: **67/67** (`npm test`). Nothing is currently broken or in progress.
 - `.cache/` and `.cache-test/` are gitignored; caches are safe to delete. The test suite wipes
   `.cache-test` on every run so cache-hit assertions are deterministic.
 - README.md documents usage, deployment (HTTPS required for public hosting; Render/Railway/BeamUp),

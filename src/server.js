@@ -280,8 +280,6 @@ async function subtitlesHandler(req, res) {
   const videoHash = query.videoHash || '';
   const videoSize = query.videoSize || '';
 
-  if (!videoHash) return res.json({ subtitles: [] });
-
   const base = baseUrl(req);
   const makeErrorTrack = (code, message) => res.json({
     subtitles: [{
@@ -297,8 +295,16 @@ async function subtitlesHandler(req, res) {
       'AI Subtitle Translator: no OpenSubtitles.com API key is configured. Reinstall the addon and set one (free at opensubtitles.com/consumers).');
   }
 
-  const os = getOSClient(cfg.osApiKey);
+  // Some streams (HTTP sources, local files) don't expose a videoHash. Fall
+  // back to the IMDb id so subtitles still work; if we have neither, return a
+  // visible error track instead of an empty subtitle list.
   const { imdbId, season, episode } = parseVideoId(id);
+  if (!videoHash && !imdbId) {
+    return makeErrorTrack('no-video-id',
+      'AI Subtitle Translator: this stream provides neither a video hash nor an IMDb id, so no source subtitle can be matched.');
+  }
+
+  const os = getOSClient(cfg.osApiKey);
   try {
     const candidates = await os.searchBest({
       videoHash,
@@ -311,8 +317,9 @@ async function subtitlesHandler(req, res) {
       limit: 15,
     });
     if (!candidates.length) {
+      const ident = videoHash ? `hash ${videoHash.slice(0, 8)}…` : `id ${id}`;
       return makeErrorTrack('no-subs',
-        `AI Subtitle Translator: no source subtitles found for this video (hash ${videoHash.slice(0, 8)}…).`);
+        `AI Subtitle Translator: no source subtitles found for this video (${ident}).`);
     }
     const subtitles = buildVariantTracks(base, cfg, candidates, type, id, videoHash, videoSize);
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-if-error=86400');

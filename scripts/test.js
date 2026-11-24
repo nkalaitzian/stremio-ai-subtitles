@@ -78,7 +78,7 @@ async function main() {
   check('resources include subtitles', manifest.json && manifest.json.resources.includes('subtitles'));
   check('types include movie and series', manifest.json && manifest.json.types.includes('movie') && manifest.json.types.includes('series'));
   check('configurationRequired is true', manifest.json && manifest.json.behaviorHints.configurationRequired === true);
-  check('manifest version is 1.1.11', manifest.json && manifest.json.version === '1.1.11');
+  check('manifest version is 1.1.12', manifest.json && manifest.json.version === '1.1.12');
   check('config schema has provider/apiKey/targetLang/prompt/osApiKey',
     manifest.json && ['provider', 'apiKey', 'targetLang', 'prompt', 'osApiKey'].every((k) => manifest.json.config.some((c) => c.key === k)));
   check('CORS header present', manifest.headers.get('access-control-allow-origin') === '*');
@@ -110,7 +110,7 @@ async function main() {
   check('HTML configure page links GitHub and Ko-fi',
     confHtml.text.includes('https://github.com/nkalaitzian/stremio-ai-subtitles') &&
     confHtml.text.includes('https://ko-fi.com/pastouris'));
-  check('HTML configure page shows the addon version', confHtml.text.includes('<p class="version">v1.1.11</p>'));
+  check('HTML configure page shows the addon version', confHtml.text.includes('<p class="version">v1.1.12</p>'));
   check('HTML configure page has Install and Copy Link buttons',
     confHtml.text.includes('id="install"') && confHtml.text.includes('id="copy"') && confHtml.text.includes('Copy Link'));
 
@@ -258,10 +258,15 @@ async function main() {
     check('error is not disguised as "no subtitles"', !badVtt.text.includes('no source subtitles'));
   }
 
-  // ---- 8. Missing videoHash -> empty list ---------------------------------
-  console.log('\n[8] empty list without videoHash');
-  const noHash = await get(`${base}/subtitles/movie/tt0000001.json`);
-  check('empty subtitles list', noHash.json && Array.isArray(noHash.json.subtitles) && noHash.json.subtitles.length === 0);
+  // ---- 8. Lookup without videoHash ----------------------------------------
+  console.log('\n[8] lookup without videoHash');
+  const noHash = await get(`${base}/${configPath}/subtitles/movie/tt0000001.json`);
+  const noHashSubs = noHash.json && noHash.json.subtitles ? noHash.json.subtitles : [];
+  check('IMDb-only lookup still returns variants', noHashSubs.length === 4, `got ${noHashSubs.length}`);
+  const noId = await get(`${base}/${configPath}/subtitles/movie/local%3Aabc.json`);
+  const noIdSubs = noId.json && noId.json.subtitles ? noId.json.subtitles : [];
+  check('no hash and no IMDb id yields a visible error track',
+    noIdSubs.length === 1 && noIdSubs[0].id === 'ai-error-no-video-id', noIdSubs[0] && noIdSubs[0].id);
 
   // ---- 9. Unconfigured request still works with defaults -------------------
   console.log('\n[9] unconfigured request uses defaults');
